@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QDir>
+#include <QLibraryInfo>
 #include <QQmlExtensionPlugin>
 
 /**
@@ -26,9 +27,10 @@ private:
     QString resolveFileUrl(const QString &filePath) const
     {
 #if defined(Q_OS_ANDROID)
-        return QStringLiteral(":/qt/qml/org/mauikit/filebrowsing/") + filePath;
+        return QStringLiteral("qrc:/qt/qml/org/mauikit/filebrowsing/") + filePath;
 #else
-        return baseUrl().toString() + QLatin1Char('/') + filePath;
+        const QString qmlModulePath = QDir(QLibraryInfo::path(QLibraryInfo::QmlImportsPath)).filePath(QStringLiteral("org/mauikit/filebrowsing"));
+        return QUrl::fromLocalFile(QDir(qmlModulePath).filePath(filePath)).toString();
 #endif
     }
 };

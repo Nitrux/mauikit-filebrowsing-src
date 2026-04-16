@@ -11,7 +11,10 @@ QList<WebDAVItem> XMLHelper::parseListDirResponse(WebDAVClient *webdavClient, QB
     QList<WebDAVItem> items;
     QString webdavNS = QStringLiteral("DAV:");
     QDomDocument doc;
-    doc.setContent(xml, true);
+    const auto parseResult = doc.setContent(xml, QDomDocument::ParseOption::UseNamespaceProcessing);
+    if (!parseResult) {
+        return items;
+    }
 
     QDomNodeList responses = doc.elementsByTagNameNS(webdavNS, QStringLiteral("response"));
 

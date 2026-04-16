@@ -6,6 +6,7 @@
 #include "filebrowsing_plugin.h"
 
 #include <QQmlEngine>
+#include <QtQml/qqml.h>
 #include <QResource>
 #include <QDebug>
 
@@ -38,7 +39,7 @@ void FileBrowsingPlugin::registerTypes(const char *uri)
     //File Browsing components
     qmlRegisterType<FMList>(uri, 1, 0, "FMList");
     qmlRegisterType<PlacesList>(uri, 1, 0, "PlacesList");
-    qmlRegisterUncreatableType<PathStatus>(uri, 1, 0, "PathStatus", QStringLiteral("cannot be created :: PathStatus"));
+    qmlRegisterUncreatableMetaObject(PathStatus::staticMetaObject, uri, 1, 0, "PathStatus", QStringLiteral("cannot be created :: PathStatus"));
 
     qmlRegisterType(componentUrl(QStringLiteral("FileBrowser.qml")), uri, 1, 0, "FileBrowser");
     qmlRegisterType(componentUrl(QStringLiteral("PlacesListBrowser.qml")), uri, 1, 0, "PlacesListBrowser");
