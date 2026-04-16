@@ -25,4 +25,3 @@ class FILEBROWSING_EXPORT Thumbnailer : public QQuickAsyncImageProvider
 public:
     QQuickImageResponse *requestImageResponse(const QString &id, const QSize &requestedSize) override;
 };
-
