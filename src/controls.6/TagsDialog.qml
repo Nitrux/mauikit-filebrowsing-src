@@ -115,15 +115,7 @@ Maui.PopupPage
         //             validator: RegExpValidator { regExp: /[0-9A-F]+/ }
         onAccepted: //here we append a new tag to the model but we do not insert it into the DB until the user saves the tag to an url
         {
-            const tags = tagText.text.split(",")
-            for(var i in tags)
-            {
-                const myTag = tags[i].trim()
-                _tagsList.append(myTag)
-                tagListComposer.list.append(myTag)
-            }
-            clear()
-            // _tagsModel.filter = ""
+            control.commitPendingTags()
         }
 
         onTextChanged:
@@ -251,19 +243,13 @@ Maui.PopupPage
                 onClicked:
                 {
                     _listView.currentIndex = index
-                    if(Maui.Handy.singleClick)
-                    {
-                        tagListComposer.list.appendItem(_tagsModel.get(_listView.currentIndex))
-                    }
+                    control.appendSelectedTag()
                 }
 
                 onDoubleClicked:
                 {
                     _listView.currentIndex = index
-                    if(!Maui.Handy.singleClick)
-                    {
-                        tagListComposer.list.appendItem(_tagsModel.get(_listView.currentIndex))
-                    }
+                    control.appendSelectedTag()
                 }
 
                 onPressAndHold:
@@ -306,9 +292,40 @@ Maui.PopupPage
      */
     function setTags()
     {
+        commitPendingTags()
         const tags = tagListComposer.list.tags
         composerList.updateToUrls(tags)
         control.tagsReady(tags)
         close()
+    }
+
+    function appendSelectedTag()
+    {
+        const tagItem = _tagsModel.get(_listView.currentIndex)
+
+        if (tagItem)
+            tagListComposer.list.appendItem(tagItem)
+    }
+
+    function commitPendingTags()
+    {
+        const pendingText = tagText.text.trim()
+
+        if (pendingText.length === 0)
+            return
+
+        const tags = pendingText.split(",")
+        for (var i in tags)
+        {
+            const myTag = tags[i].trim()
+
+            if (myTag.length === 0)
+                continue
+
+            _tagsList.append(myTag)
+            tagListComposer.list.append(myTag)
+        }
+
+        tagText.clear()
     }
 }
