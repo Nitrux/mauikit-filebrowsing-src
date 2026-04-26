@@ -74,10 +74,9 @@ Maui.PopupPage
     readonly property alias composerList: tagListComposer.list
 
     /**
-     * @brief Emitted once the assignment of the new set of tags has been done. This can include removal or additions.
-     * This won't actually write any changes to the file URLs, to write the changes refer to the `composerList.updateToUrls` function.
-     * @see TagsList::updateToUrls
-     * @param tags the list of the new tag names associated to the file URLs
+     * @brief Emitted once the current set of tags has been saved to the target file URLs.
+     * This can include removals or additions depending on how the composer list was edited.
+     * @param tags the list of tag names that was saved
      */
     signal tagsReady(var tags)
 
@@ -301,11 +300,14 @@ Maui.PopupPage
     onOpened: tagText.forceActiveFocus()
 
     /**
-     * @brief Gathers the composed set of tags in the bottom composing TagsBar to the given file URLs, emits the `tagsReady` signal and then closes the dialog.
+     * @brief Saves the currently composed set of tags to the target file URLs,
+     * emits the `tagsReady` signal and then closes the dialog.
      */
     function setTags()
     {
-        control.tagsReady(tagListComposer.list.newTags )
+        const tags = tagListComposer.list.tags
+        composerList.updateToUrls(tags)
+        control.tagsReady(tags)
         close()
     }
 }

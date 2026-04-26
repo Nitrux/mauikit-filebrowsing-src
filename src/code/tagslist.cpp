@@ -96,17 +96,21 @@ void TagsList::insertToUrls(const QString &tag)
         m_tagging->tagUrl(url, tag);
 }
 
-void TagsList::updateToUrls(const QStringList &tags) //if there is only one url update the tags if there are more than one url then add the new tags
+void TagsList::updateToUrls(const QStringList &tags) // if there is only one url update the tags, if there are more than one url then add the new tags
 {
     if (this->m_urls.isEmpty())
         return;
-    
+
+    if (this->m_urls.size() == 1)
+    {
+        m_tagging->updateUrlTags(this->m_urls.constFirst(), tags, this->strict);
+        return;
+    }
+
     for (const auto &url : std::as_const(this->m_urls))
     {
-        for(const auto &tag : tags)
-        {
+        for (const auto &tag : tags)
             m_tagging->tagUrl(url, tag);
-        }
     }
 }
 

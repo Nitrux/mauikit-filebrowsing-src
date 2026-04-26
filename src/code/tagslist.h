@@ -116,7 +116,9 @@ public Q_SLOTS:
     void insertToUrls(const QString &tag);
 
     /**
-     * @brief Updates a list of tags associated to the current file URLs. All the previous tags associated to each file URL are removed and replaced by the new ones
+     * @brief Updates the tags associated to the current file URLs.
+     * If there is a single target URL, its tags are replaced by the provided list.
+     * If there are multiple target URLs, the provided tags are associated to each URL without removing existing ones.
      * @param tags tags to be updated
      */
     void updateToUrls(const QStringList &tags);
@@ -165,4 +167,3 @@ public Q_SLOTS:
      */
     bool contains(const QString &tag);
 };
-
