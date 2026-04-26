@@ -182,7 +182,7 @@ Maui.PopupPage
             clip: true
             currentIndex: -1
 
-            holder.emoji: "qrc:/assets/tag.svg"
+            holder.emoji: "tag"
             holder.visible: _listView.count === 0
             holder.title : i18nd("mauikitfilebrowsing", "No Tags!")
             holder.body: i18nd("mauikitfilebrowsing", "Create new tags to organize your files.")
@@ -206,12 +206,13 @@ Maui.PopupPage
 
                    contentItem:  Maui.GridItemTemplate
                     {
-                        readonly property var itemInfo : FB.FM.getFileInfo(tagListComposer.list.urls[0])
+                        readonly property string currentUrl : tagListComposer.list.urls.length > 0 ? tagListComposer.list.urls[0] : ""
+                        readonly property var itemInfo : currentUrl.length > 0 ? FB.FM.getFileInfo(currentUrl) : ({})
 
                         iconSizeHint: Maui.Style.iconSizes.huge
-                        iconSource: itemInfo.icon
+                        iconSource: itemInfo.icon || "tag"
                         fillMode: Image.PreserveAspectCrop
-                        imageSource: control.thumbnailSource || itemInfo.thumbnail
+                        imageSource: control.thumbnailSource || itemInfo.thumbnail || ""
                         text1: i18np("1 item", "%1 items", tagListComposer.list.urls.length)
                     }
                 }
@@ -283,7 +284,7 @@ Maui.PopupPage
     page.footer: FB.TagList
     {
         id: tagListComposer
-        width: parent.width
+        width: parent ? parent.width : 0
         visible: count > 0
 
         onTagRemoved: (index) => list.remove(index)
