@@ -95,7 +95,7 @@ Maui.PopupPage
         /**
          * @brief This is a information map of the first file in the `urls` list. It is used to display a miniature image in the dialog information section.
          */
-        readonly property var singleItem : FB.FM.getFileInfo(control.urls[0])
+        readonly property var singleItem : control.urls && control.urls.length > 0 ? FB.FM.getFileInfo(control.urls[0]) : ({})
         
         /**
          * @brief An alias for the template element handling the information section. This is exposed to access it and fine tune details, or embed more element into it. This template is handled by a ListItemTemplate.
