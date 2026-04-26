@@ -9,12 +9,17 @@ using namespace FMH;
 
 std::function<FMH::MODEL(const QUrl &url)> FileLoader::informer = &FMStatic::getFileInfoModel;
 
-FileLoader::FileLoader(QObject *parent) : QObject(parent)
+FileLoader::FileLoader(QObject *parent) : QObject(nullptr)
   , m_thread(new QThread)
 {
     qRegisterMetaType<QDir::Filters>("QDir::Filters");
     qRegisterMetaType<FMH::MODEL>("FMH::MODEL");
     qRegisterMetaType<FMH::MODEL_LIST>("FMH::MODEL_LIST");
+
+    if (parent) {
+        connect(parent, &QObject::destroyed, this, &QObject::deleteLater);
+    }
+
     this->moveToThread(m_thread);
     connect(m_thread, &QThread::finished, m_thread, &QObject::deleteLater);
     connect(this, &FileLoader::start, this, &FileLoader::getFiles);

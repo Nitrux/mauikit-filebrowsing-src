@@ -3,6 +3,24 @@
 #include "tagging.h"
 #include <QTimer>
 
+namespace
+{
+QStringList normalizedUrls(const QStringList &urls)
+{
+    QStringList cleanUrls;
+    cleanUrls.reserve(urls.size());
+
+    for (const auto &url : urls) {
+        if (!url.trimmed().isEmpty()) {
+            cleanUrls << url;
+        }
+    }
+
+    cleanUrls.removeDuplicates();
+    return cleanUrls;
+}
+}
+
 TagsList::TagsList(QObject *parent)
     : MauiList(parent)
     , m_refreshTimer(new QTimer(this))
@@ -37,8 +55,8 @@ TagsList::TagsList(QObject *parent)
                     this->refresh();
             });
 
-    connect(this, &TagsList::urlsChanged, this, &TagsList::setList);
-    connect(this, &TagsList::strictChanged, this, &TagsList::setList);
+    connect(this, &TagsList::urlsChanged, this, &TagsList::refresh);
+    connect(this, &TagsList::strictChanged, this, &TagsList::refresh);
 }
 
 TagsList::~TagsList()
@@ -60,14 +78,14 @@ void TagsList::setList()
 
 FMH::MODEL_LIST TagsList::getDBTags() const
 {
-    
-    if (this->m_urls.isEmpty())
+    const auto urls = normalizedUrls(this->m_urls);
+
+    if (urls.isEmpty())
     {
-        return FMH::toModelList(m_tagging->getAllTags(this->strict));
-        
-    }else
+        return m_includeAllTagsWhenUrlsEmpty ? FMH::toModelList(m_tagging->getAllTags(this->strict)) : FMH::MODEL_LIST{};
+    } else
     {
-        return std::accumulate(this->m_urls.constBegin(), this->m_urls.constEnd(), FMH::MODEL_LIST(), [this](FMH::MODEL_LIST &list, const QString &url) {
+        return std::accumulate(urls.constBegin(), urls.constEnd(), FMH::MODEL_LIST(), [this](FMH::MODEL_LIST &list, const QString &url) {
             list << FMH::toModelList(m_tagging->getUrlTags(url, this->strict));
             return list;
         });
@@ -210,11 +228,28 @@ QStringList TagsList::getUrls() const
 
 void TagsList::setUrls(const QStringList &value)
 {
-    if (this->m_urls == value)
+    const auto cleanUrls = normalizedUrls(value);
+
+    if (this->m_urls == cleanUrls)
         return;
 
-    this->m_urls = value;
+    this->m_urls = cleanUrls;
     Q_EMIT this->urlsChanged();
+}
+
+bool TagsList::includeAllTagsWhenUrlsEmpty() const
+{
+    return m_includeAllTagsWhenUrlsEmpty;
+}
+
+void TagsList::setIncludeAllTagsWhenUrlsEmpty(bool value)
+{
+    if (m_includeAllTagsWhenUrlsEmpty == value)
+        return;
+
+    m_includeAllTagsWhenUrlsEmpty = value;
+    Q_EMIT includeAllTagsWhenUrlsEmptyChanged();
+    refresh();
 }
 
 void TagsList::append(const QString &tag)
@@ -253,5 +288,5 @@ bool TagsList::contains(const QString &tag)
 
 void TagsList::componentComplete()
 {
-    this->setList();
+    this->refresh();
 }

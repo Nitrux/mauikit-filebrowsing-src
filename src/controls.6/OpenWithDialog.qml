@@ -97,7 +97,10 @@ Maui.PopupPage
 
                 Maui.GridItemTemplate
                 {
-                    readonly property var itemInfo : FB.FM.getFileInfo( control.urls[0])
+                    readonly property url currentUrl: control.urls.length > 0 ? control.urls[0] : ""
+                    readonly property var itemInfo : currentUrl.toString().length > 0
+                                                     ? FB.FM.getFileInfo(currentUrl)
+                                                     : ({icon: "", thumbnail: ""})
 
                     anchors.fill: parent
                     anchors.margins: Maui.Style.space.tiny

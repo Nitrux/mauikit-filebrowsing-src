@@ -136,7 +136,10 @@ Item
     Connections
     {
         target: tagsList.list
-        onUrlsChanged: closeEditMode()
+        function onUrlsChanged()
+        {
+            closeEditMode()
+        }
     }
     
     StackView

@@ -32,6 +32,12 @@ class TagsList : public MauiList
      * The list of file URLs to look for their tags.
      */
     Q_PROPERTY(QStringList urls READ getUrls WRITE setUrls NOTIFY urlsChanged)
+
+    /**
+     * Whether an empty URL list should fall back to browsing every tag in the database.
+     * This is useful for tag picker views, but should be disabled for per-file tag bars.
+     */
+    Q_PROPERTY(bool includeAllTagsWhenUrlsEmpty READ includeAllTagsWhenUrlsEmpty WRITE setIncludeAllTagsWhenUrlsEmpty NOTIFY includeAllTagsWhenUrlsEmptyChanged)
     
     /**
      * The resulting list of tag names that were found. Or compossed, some existing tags might still not be added permanently.
@@ -55,6 +61,8 @@ public:
 
     QStringList getUrls() const;
     void setUrls(const QStringList &value);
+    bool includeAllTagsWhenUrlsEmpty() const;
+    void setIncludeAllTagsWhenUrlsEmpty(bool value);
 
     QStringList getTags() const;
     QStringList getNewTags() const;
@@ -66,6 +74,7 @@ private:
     void setList();
 
     bool strict = true;
+    bool m_includeAllTagsWhenUrlsEmpty = true;
     QStringList m_urls;
 
     void append(const FMH::MODEL &tag);
@@ -77,6 +86,7 @@ Q_SIGNALS:
     void strictChanged();
     void urlsChanged();
     void tagsChanged();
+    void includeAllTagsWhenUrlsEmptyChanged();
 
 public Q_SLOTS:
 

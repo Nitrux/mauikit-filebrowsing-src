@@ -70,6 +70,7 @@ Maui.ListBrowser
     list: FB.TagsListModel
     {
       id: _tagsList
+      includeAllTagsWhenUrlsEmpty: false
     }
   }
   
