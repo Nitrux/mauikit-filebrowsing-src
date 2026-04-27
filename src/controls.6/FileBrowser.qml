@@ -423,6 +423,7 @@ Maui.Page
     footBar.rightContent: Button
     {
         visible: control.currentPath.startsWith("trash:/")
+        display: AbstractButton.TextOnly
         icon.name: "trash-empty"
         text: i18nd("mauikitfilebrowsing", "Empty Trash")
         onClicked: FB.FM.emptyTrash()

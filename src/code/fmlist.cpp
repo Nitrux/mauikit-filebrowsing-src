@@ -49,7 +49,7 @@ FMList::FMList(QObject *parent)
     connect(this->fm, &FM::pathContentReady, [this](QUrl) {
         Q_EMIT this->preListChanged();
         this->sortList();
-        this->setStatus({PathStatus::STATUS_CODE::READY, this->list.isEmpty() ? i18n("Nothing here!") : QStringLiteral(""), this->list.isEmpty() ? i18n("This place seems to be empty") : QStringLiteral(""), this->list.isEmpty() ? QStringLiteral("folder-add") : QStringLiteral(""), this->list.isEmpty(), true});
+        this->setStatus(this->emptyStateStatus());
         Q_EMIT this->postListChanged();
         Q_EMIT this->countChanged();
     });
@@ -91,7 +91,7 @@ FMList::FMList(QObject *parent)
             this->remove(index);
         }
 
-        this->setStatus({PathStatus::STATUS_CODE::READY, this->list.isEmpty() ? i18n("Nothing here!") : QStringLiteral(""), this->list.isEmpty() ? i18n("This place seems to be empty") : QStringLiteral(""), this->list.isEmpty() ? QStringLiteral("folder-add") : QStringLiteral(""), this->list.isEmpty(), true});
+        this->setStatus(this->emptyStateStatus());
     });
 
     connect(this->fm, &FM::warningMessage, [this](const QString &message) {
@@ -158,9 +158,32 @@ void FMList::assignList(const FMH::MODEL_LIST &list)
     Q_EMIT this->preListChanged();
     this->list = list;
     this->sortList();
-    this->setStatus({PathStatus::STATUS_CODE::READY, this->list.isEmpty() ? i18n("Nothing here!") : QStringLiteral(""), this->list.isEmpty() ? i18n("This place seems to be empty") : QStringLiteral(""), this->list.isEmpty() ? QStringLiteral("folder-add") : QStringLiteral(""), this->list.isEmpty(), true});
+    this->setStatus(this->emptyStateStatus());
     Q_EMIT this->postListChanged();
     Q_EMIT this->countChanged();
+}
+
+PathStatus FMList::emptyStateStatus() const
+{
+    if (!this->list.isEmpty()) {
+        return {PathStatus::STATUS_CODE::READY, QStringLiteral(""), QStringLiteral(""), QStringLiteral(""), false, true};
+    }
+
+    if (this->pathType == FMList::PATHTYPE::TRASH_PATH) {
+        return {PathStatus::STATUS_CODE::READY,
+                i18n("Trash is empty"),
+                i18n("Items you delete will appear here."),
+                QStringLiteral("trash-empty"),
+                true,
+                true};
+    }
+
+    return {PathStatus::STATUS_CODE::READY,
+            i18n("Nothing here!"),
+            i18n("This place seems to be empty"),
+            QStringLiteral("folder-add"),
+            true,
+            true};
 }
 
 void FMList::appendToList(const FMH::MODEL_LIST &list)
@@ -904,6 +927,5 @@ int FMList::indexOfFile(const QString& url)
     else
         return -1;
 }
-
 
 

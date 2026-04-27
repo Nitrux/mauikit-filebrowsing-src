@@ -429,6 +429,7 @@ private:
     void sortList();
     void filterContent(const QString &query, const QUrl &path);
     void setStatus(const PathStatus &status);
+    PathStatus emptyStateStatus() const;
 
     bool saveImageFile(const QImage &image);
     bool saveTextFile(const QString &data, const QString &format);
@@ -601,4 +602,3 @@ Q_SIGNALS:
      */
     void progress(int percent);
 };
-
