@@ -31,8 +31,87 @@
 
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QRegularExpression>
 
 #include <KLocalizedString>
+
+namespace
+{
+QList<QUrl> normalizeUrls(const QStringList &urls)
+{
+    QList<QUrl> normalizedUrls;
+    normalizedUrls.reserve(urls.size());
+
+    for (const auto &url : urls) {
+        normalizedUrls << QUrl::fromUserInput(url, QStringLiteral("/"), QUrl::AssumeLocalFile);
+    }
+
+    return normalizedUrls;
+}
+
+QList<QUrl> parseClipboardUrlList(const QString &data)
+{
+    QList<QUrl> urls;
+
+    const auto entries = data.split(QRegularExpression(QStringLiteral("[,\r\n]")), Qt::SkipEmptyParts);
+    urls.reserve(entries.size());
+
+    for (const auto &entry : entries) {
+        const auto candidate = entry.trimmed();
+
+        if (candidate.isEmpty() || candidate == QStringLiteral("copy") || candidate == QStringLiteral("cut") || candidate.startsWith(QLatin1Char('#')))
+            continue;
+
+        const auto url = QUrl::fromUserInput(candidate, QStringLiteral("/"), QUrl::AssumeLocalFile);
+
+        if (!url.isValid())
+            continue;
+
+        if (url.isLocalFile()) {
+            if (!FMH::fileExists(url))
+                continue;
+        } else if (url.scheme().isEmpty()) {
+            continue;
+        }
+
+        urls << url;
+    }
+
+    return urls;
+}
+
+QList<QUrl> clipboardUrls(const QMimeData *mimeData)
+{
+    if (mimeData->hasUrls())
+        return mimeData->urls();
+
+    if (mimeData->hasFormat(QStringLiteral("x-special/gnome-copied-files")))
+        return parseClipboardUrlList(QString::fromUtf8(mimeData->data(QStringLiteral("x-special/gnome-copied-files"))));
+
+    if (mimeData->hasFormat(QStringLiteral("text/uri-list")))
+        return parseClipboardUrlList(QString::fromUtf8(mimeData->data(QStringLiteral("text/uri-list"))));
+
+    if (mimeData->hasText())
+        return parseClipboardUrlList(mimeData->text());
+
+    return {};
+}
+
+bool clipboardCutOperation(const QMimeData *mimeData)
+{
+    const QByteArray kdeCutData = mimeData->data(QStringLiteral("application/x-kde-cutselection"));
+    if (!kdeCutData.isEmpty())
+        return kdeCutData.at(0) == '1';
+
+    if (mimeData->hasFormat(QStringLiteral("x-special/gnome-copied-files"))) {
+        const auto payload = QString::fromUtf8(mimeData->data(QStringLiteral("x-special/gnome-copied-files")));
+        const auto firstLine = payload.section(QLatin1Char('\n'), 0, 0).trimmed();
+        return firstLine == QStringLiteral("cut");
+    }
+
+    return false;
+}
+}
 
 FMList::FMList(QObject *parent)
     : MauiList(parent)
@@ -40,6 +119,7 @@ FMList::FMList(QObject *parent)
 {
     m_tagging = Tagging::getInstance();
     qRegisterMetaType<FMList *>("const FMList*"); // this is needed for QML to know of FMList in the search method
+    connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &FMList::clipboardChanged);
     connect(this->fm, &FM::cloudServerContentReady, [this](FMStatic::PATH_CONTENT res) {
         if (this->path == res.path) {
             this->assignList(res.content);
@@ -597,7 +677,10 @@ bool FMList::saveTextFile(const QString& data, const QString &format)
 void FMList::paste()
 {
     if(m_readOnly)
+    {
+        qWarning() << "FMList::paste aborted because destination is read-only" << this->path;
         return;
+    }
 
     const QMimeData *mimeData = QGuiApplication::clipboard()->mimeData();
 
@@ -607,25 +690,43 @@ void FMList::paste()
         return;
     }
 
+    const auto urls = clipboardUrls(mimeData);
+    const auto cut = clipboardCutOperation(mimeData);
+
+    qDebug() << "FMList::paste clipboard state"
+             << "destination" << this->path
+             << "formats" << mimeData->formats()
+             << "hasUrls" << mimeData->hasUrls()
+             << "hasText" << mimeData->hasText()
+             << "hasImage" << mimeData->hasImage()
+             << "parsedUrls" << urls
+             << "cut" << cut
+             << "kdeCutData" << mimeData->data(QStringLiteral("application/x-kde-cutselection"))
+             << "gnomeCopiedFilesPreview" << QString::fromUtf8(mimeData->data(QStringLiteral("x-special/gnome-copied-files"))).left(200)
+             << "uriListPreview" << QString::fromUtf8(mimeData->data(QStringLiteral("text/uri-list"))).left(200)
+             << "textPreview" << mimeData->text().left(200);
+
     if (mimeData->hasImage())
     {
+        qDebug() << "FMList::paste handling image clipboard payload";
         saveImageFile(qvariant_cast<QImage>(mimeData->imageData()));
-    } else if (mimeData->hasUrls())
+    } else if (!urls.isEmpty())
     {
-        const QByteArray a = mimeData->data(QStringLiteral("application/x-kde-cutselection"));
-        const bool cut =  (!a.isEmpty() && a.at(0) == '1');
+        qDebug() << "FMList::paste dispatching file operation"
+                 << (cut ? "cut" : "copy")
+                 << "urls" << urls
+                 << "destination" << this->path;
 
-        if(cut)
-        {
-            cutInto(QUrl::toStringList(mimeData->urls()));
-            // mimeData->clear();
-        }else
-        {
-            copyInto(QUrl::toStringList(mimeData->urls()));
+        if (cut) {
+            this->fm->cut(urls, this->path);
+            QGuiApplication::clipboard()->clear();
+        } else {
+            this->fm->copy(urls, this->path);
         }
 
     } else if (mimeData->hasText())
     {
+        qDebug() << "FMList::paste falling back to saving clipboard text into a file";
         saveTextFile(mimeData->text(), QStringLiteral("txt"));
     } else
     {
@@ -633,16 +734,18 @@ void FMList::paste()
     }
 }
 
-int FMList::clipboardFilesCount()
+int FMList::clipboardFilesCount() const
 {
-    if(FMList::clipboardHasContent())
+    if(clipboardHasContent())
     {
         const QMimeData *mimeData = QGuiApplication::clipboard()->mimeData();
+        if (!mimeData)
+            return 0;
 
-        if( mimeData->hasUrls())
-        {
-            return mimeData->urls().size();
-        }
+        const auto urls = clipboardUrls(mimeData);
+
+        if(!urls.isEmpty())
+            return urls.size();
 
         if(mimeData->hasImage() || mimeData->hasText())
         {
@@ -653,7 +756,7 @@ int FMList::clipboardFilesCount()
     return 0;
 }
 
-bool FMList::clipboardHasContent()
+bool FMList::clipboardHasContent() const
 {
     const QMimeData *mimeData = QGuiApplication::clipboard()->mimeData();
 
@@ -663,24 +766,34 @@ bool FMList::clipboardHasContent()
         return false;
     }
 
-    return mimeData->hasUrls() || mimeData->hasImage() || mimeData->hasText();
+    return !clipboardUrls(mimeData).isEmpty() || mimeData->hasImage() || mimeData->hasText();
 }
 
 
 void FMList::copyInto(const QStringList &urls)
 {
     if(m_readOnly)
+    {
+        qWarning() << "FMList::copyInto aborted because destination is read-only" << this->path;
         return;
+    }
 
-    this->fm->copy(QUrl::fromStringList(urls), this->path);
+    qDebug() << "FMList::copyInto" << "sourceUrls" << urls << "normalizedUrls" << normalizeUrls(urls) << "destination" << this->path;
+
+    this->fm->copy(normalizeUrls(urls), this->path);
 }
 
 void FMList::cutInto(const QStringList &urls)
 {
     if(m_readOnly)
+    {
+        qWarning() << "FMList::cutInto aborted because destination is read-only" << this->path;
         return;
+    }
 
-    this->fm->cut(QUrl::fromStringList(urls), this->path);
+    qDebug() << "FMList::cutInto" << "sourceUrls" << urls << "normalizedUrls" << normalizeUrls(urls) << "destination" << this->path;
+
+    this->fm->cut(normalizeUrls(urls), this->path);
 }
 
 void FMList::setDirIcon(const int &index, const QString &iconName)

@@ -1039,6 +1039,7 @@ Maui.Page
      **/
     function paste()
     {
+        console.log("FILEBROWSER.PASTE", control.currentPath, control.currentFMList, control.readOnly)
         control.currentFMList.paste()
     }
 

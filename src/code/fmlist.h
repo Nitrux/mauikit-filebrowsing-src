@@ -235,6 +235,7 @@ class FILEBROWSING_EXPORT FMList : public MauiList
      * The `filters` and `filterType` are the properties to be merged. If this is set to false, then the `filters` property will have priority over the `filterType` one, unless it is empty.
      */
     Q_PROPERTY(bool mergeFilters READ mergeFilters WRITE setMergeFilters NOTIFY mergeFiltersChanged)
+    Q_PROPERTY(bool clipboardHasContent READ clipboardHasContent NOTIFY clipboardChanged)
 
 public:
     /**
@@ -520,8 +521,8 @@ public Q_SLOTS:
      * @brief Whether the clipboard has a supported type of content.
      * @return whether the clipboard content is a supported file URL or a text or image raw data.
      */
-    static bool clipboardHasContent();
-    static int clipboardFilesCount();
+    bool clipboardHasContent() const;
+    int clipboardFilesCount() const;
 
     /**
      * @brief Copy a list of file URLs into the current directory
@@ -595,6 +596,7 @@ Q_SIGNALS:
     void autoLoadChanged();
     void readOnlyChanged();
     void mergeFiltersChanged();
+    void clipboardChanged();
 
     /**
      * @brief Emitted when the listing process has any error message that needs to be notified.

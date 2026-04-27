@@ -26,6 +26,7 @@
 #include <KApplicationTrader>
 #include <KIO/PreviewJob>
 #include <KFileItem>
+#include <KJob>
 #endif
 
 QString FMStatic::PathTypeLabel(const FMStatic::PATHTYPE_KEY& key)
@@ -215,8 +216,16 @@ static bool copyRecursively(QString sourceFolder, QString destFolder)
 
 bool FMStatic::copy(const QList<QUrl> &urls, const QUrl &destinationDir)
 {
+    qDebug() << "FMStatic::copy requested" << "urls" << urls << "destination" << destinationDir;
 #ifdef KIO_AVAILABLE
     auto job = KIO::copy(urls, destinationDir);
+    QObject::connect(job, &KJob::result, job, [job, urls, destinationDir]() {
+        qDebug() << "FMStatic::copy result"
+                 << "urls" << urls
+                 << "destination" << destinationDir
+                 << "error" << job->error()
+                 << "errorText" << job->errorString();
+    });
     job->start();
     return true;
 #else
@@ -225,6 +234,7 @@ bool FMStatic::copy(const QList<QUrl> &urls, const QUrl &destinationDir)
         if (!srcFileInfo.isDir() && srcFileInfo.isFile()) {
             const auto _destination = QUrl(destinationDir.toString() + QStringLiteral("/") + FMStatic::getFileInfoModel(url)[FMH::MODEL_KEY::LABEL]);
             if (!QFile::copy(url.toLocalFile(), _destination.toLocalFile())) {
+                qWarning() << "FMStatic::copy failed" << url << "->" << _destination;
                 continue;
             }
         } else {
@@ -233,8 +243,10 @@ bool FMStatic::copy(const QList<QUrl> &urls, const QUrl &destinationDir)
             if (!destDir.exists())
                 destDir.mkdir(_destination.toLocalFile());
 
-            if (!copyRecursively(url.toLocalFile(), _destination.toLocalFile()))
+            if (!copyRecursively(url.toLocalFile(), _destination.toLocalFile())) {
+                qWarning() << "FMStatic::copyRecursively failed" << url << "->" << _destination;
                 continue;
+            }
         }
     }
     return true;
@@ -260,12 +272,20 @@ bool FMStatic::cut(const QList<QUrl> &urls, const QUrl &where)
 
 bool FMStatic::cut(const QList<QUrl> &urls, const QUrl &where, const QString &name)
 {
+    qDebug() << "FMStatic::cut requested" << "urls" << urls << "destination" << where << "name" << name;
 #ifdef KIO_AVAILABLE
     QUrl _where = where;
     if (!name.isEmpty())
         _where = QUrl(where.toString() + QStringLiteral("/") + name);
     
     auto job = KIO::move(urls, _where, KIO::HideProgressInfo);
+    QObject::connect(job, &KJob::result, job, [job, urls, _where]() {
+        qDebug() << "FMStatic::cut result"
+                 << "urls" << urls
+                 << "destination" << _where
+                 << "error" << job->error()
+                 << "errorText" << job->errorString();
+    });
     job->start();
 
     for (const auto &url : urls) {
@@ -284,7 +304,8 @@ bool FMStatic::cut(const QList<QUrl> &urls, const QUrl &where, const QString &na
             _where = QUrl(where.toString() + QStringLiteral("/") + name);
 
         QFile file(url.toLocalFile());
-        file.rename(_where.toLocalFile());
+        if (!file.rename(_where.toLocalFile()))
+            qWarning() << "FMStatic::cut rename failed" << url << "->" << _where;
 
         Tagging::getInstance()->updateUrl(url.toString(), _where.toString());
     }
