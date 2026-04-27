@@ -1272,6 +1272,10 @@ Maui.Page
             return
         }
 
+        control.currentFMModel.clearFilters()
+        _searchField.clear()
+        _filterButton.checked = false
+        control.settings.searchBarVisible = false
         _stackView.pop()
         _browser.forceActiveFocus()
     }
