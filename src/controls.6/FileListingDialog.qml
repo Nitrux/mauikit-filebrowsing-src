@@ -125,8 +125,8 @@ Maui.PopupPage
             leftLabels.spacing: control.spacing
             
             headerSizeHint: template.iconSizeHint + Maui.Style.space.big
-            iconSource: singleItem.icon
-            imageSource: singleItem.thumbnail
+            iconSource: singleItem && singleItem.icon ? singleItem.icon : ""
+            imageSource: singleItem && singleItem.thumbnail ? singleItem.thumbnail : ""
             implicitHeight: Math.max(template.leftLabels.implicitHeight, 64)
             
             leftLabels.data: ColumnLayout

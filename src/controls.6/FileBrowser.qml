@@ -1370,6 +1370,7 @@ Maui.Page
      */
     function forceActiveFocus()
     {
-        control.currentView.forceActiveFocus()
+        if(control.currentView)
+            control.currentView.forceActiveFocus()
     }
 }
