@@ -431,8 +431,7 @@ Maui.Page
             const job = FB.FM.emptyTrash()
             if(job && control.currentFMList)
             {
-                control.currentFMList.clearContents()
-                job.finished.connect(() => control.currentFMList.refresh())
+                job.finished.connect(() => control.currentFMList.clearContents())
             }
         }
     }
