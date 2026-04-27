@@ -342,8 +342,8 @@ Maui.Page
         visible: active
         sourceComponent: ToolButton
         {
-            text: i18nd("mauikitfilebrowsing", "Back")
             icon.name: "go-previous"
+            display: AbstractButton.IconOnly
             onClicked: control.quitSearch()
         }
     }
@@ -406,7 +406,7 @@ Maui.Page
             icon.name: "view-filter"
             //            text: i18nd("mauikitfilebrowsing", "Filter")
             checkable: true
-            checked: true
+            checked: false
             onTriggered:
             {
                 control.view.filter = ""
@@ -1283,6 +1283,7 @@ Maui.Page
     function search(query)
     {
         openSearch()
+        _filterButton.checked = false
         _searchField.text = query
 
         _stackView.currentItem.title = i18nd("mauikitfilebrowsing", "Search: %1", query)

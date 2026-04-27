@@ -123,6 +123,7 @@ Maui.AltBrowser
      * @see FMList::status::code
      */
     readonly property bool loading : currentFMList.status.code === FB.PathStatus.LOADING
+    readonly property bool searchLoadingPlaceholder: loading && objectName === "searchView"
 
     /**
      * @see FMList::readOnly
@@ -263,10 +264,12 @@ Maui.AltBrowser
         visible: control.loading
     }
 
-    holder.visible: _holder.visible
-    holder.emoji: _holder.emoji
-    holder.title: _holder.title
-    holder.body: _holder.body
+    holder.visible: searchLoadingPlaceholder || _holder.visible
+    holder.emoji: searchLoadingPlaceholder ? "edit-find" : _holder.emoji
+    holder.title: searchLoadingPlaceholder ? i18nd("mauikitfilebrowsing", "Searching files…") : _holder.title
+    holder.body: searchLoadingPlaceholder
+        ? i18nd("mauikitfilebrowsing", "Index is scanning this location for matches. Results will appear here as they are found.")
+        : _holder.body
 
     Maui.ContextualMenu
     {
