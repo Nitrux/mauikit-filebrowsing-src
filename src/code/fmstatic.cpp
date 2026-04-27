@@ -330,11 +330,14 @@ void FMStatic::moveToTrash(const QList<QUrl> &urls)
 #endif
 }
 
-void FMStatic::emptyTrash()
+QObject *FMStatic::emptyTrash()
 {
 #ifdef KIO_AVAILABLE
     auto job = KIO::emptyTrash();
     job->start();
+    return job;
+#else
+    return nullptr;
 #endif
 }
 

@@ -496,6 +496,12 @@ void FMList::refresh()
     Q_EMIT this->pathChanged();
 }
 
+void FMList::clearContents()
+{
+    this->clear();
+    this->setStatus(this->emptyStateStatus());
+}
+
 void FMList::createDir(const QString &name)
 {
     if(m_readOnly)
@@ -927,5 +933,4 @@ int FMList::indexOfFile(const QString& url)
     else
         return -1;
 }
-
 

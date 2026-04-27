@@ -623,7 +623,7 @@ public Q_SLOTS:
     /**
      * @brief Empty the trashcan
      */
-    static void emptyTrash();
+    static QObject *emptyTrash();
 
     /**
      * @brief Rename a file. The associated tags will be updated.

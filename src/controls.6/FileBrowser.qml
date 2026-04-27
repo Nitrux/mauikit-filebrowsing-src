@@ -426,7 +426,15 @@ Maui.Page
         display: AbstractButton.TextOnly
         icon.name: "trash-empty"
         text: i18nd("mauikitfilebrowsing", "Empty Trash")
-        onClicked: FB.FM.emptyTrash()
+        onClicked:
+        {
+            const job = FB.FM.emptyTrash()
+            if(job && control.currentFMList)
+            {
+                control.currentFMList.clearContents()
+                job.finished.connect(() => control.currentFMList.refresh())
+            }
+        }
     }
 
     Component

@@ -473,6 +473,12 @@ public Q_SLOTS:
     void refresh();
 
     /**
+     * @brief Clear the current visible contents and update the empty-state status.
+     * Useful for destructive operations whose backend notifications may arrive later.
+     */
+    void clearContents();
+
+    /**
      * @brief Create a new directory within the current directory.
      * @param name the name of the directory
      */
