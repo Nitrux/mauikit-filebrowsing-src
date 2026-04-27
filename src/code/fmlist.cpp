@@ -79,7 +79,7 @@ FMList::FMList(QObject *parent)
         if (res.path != this->path)
             return;
 
-        if (!FMH::fileExists(res.path)) {
+        if (res.path.isLocalFile() && !FMH::fileExists(res.path)) {
             this->setStatus({PathStatus::STATUS_CODE::ERROR, i18n("Error"), i18n("This URL cannot be listed"), QStringLiteral("documentinfo"), true, false});
             return;
         }
@@ -933,4 +933,3 @@ int FMList::indexOfFile(const QString& url)
     else
         return -1;
 }
-
