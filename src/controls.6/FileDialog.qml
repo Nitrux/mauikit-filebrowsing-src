@@ -137,6 +137,15 @@ Maui.PopupPage
      * @property bool FileDialog::singleSelection
      */
     property alias singleSelection : _selectionBar.singleSelection
+
+    /**
+     * @brief Sidebar place paths hidden for the file picker use case.
+     */
+    readonly property var hiddenSidebarPaths : [
+        "tags:///fav",
+        "tags:///",
+        "file:///"
+    ]
     
     /**
      * @brief On save mode a text field is visible and this property is used to assign its default text value.
@@ -232,7 +241,7 @@ Maui.PopupPage
         Maui.ToolBar
         {
             visible: control.mode === FileDialog.Modes.Save
-            width: parent.width
+            Layout.fillWidth: true
             position: ToolBar.Footer
             
             middleContent: TextField
@@ -276,6 +285,8 @@ Maui.PopupPage
             
             sourceComponent: FB.PlacesListBrowser
             {
+                hiddenPaths: control.hiddenSidebarPaths
+
                 onPlaceClicked: (path) =>
                                 {
                                     //pageRow.currentIndex = 1
@@ -287,8 +298,7 @@ Maui.PopupPage
                 list.groups:  [
                     FB.FMList.BOOKMARKS_PATH,
                     FB.FMList.REMOTE_PATH,
-                    FB.FMList.CLOUD_PATH,
-                    FB.FMList.DRIVES_PATH]
+                    FB.FMList.CLOUD_PATH]
             }
         }
         
@@ -512,17 +522,14 @@ Maui.PopupPage
                 }
             }
             
-            footer: Maui.SelectionBar
+            Maui.SelectionBar
             {
                 id: _selectionBar
-                visible: count > 0
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: Math.min(parent.width-(Maui.Style.space.medium*2), implicitWidth)
-                maxListHeight: control.height - (Maui.Style.contentMargins*2)
+                visible: false
                 
                 listDelegate: Maui.ListBrowserDelegate
                 {
-                    width: ListView.view.width
+                    width: control.width
                     iconSource: model.icon
                     imageSource: model.thumbnail
                     label1.text: model.label

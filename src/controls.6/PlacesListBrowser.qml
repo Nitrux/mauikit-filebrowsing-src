@@ -71,12 +71,33 @@ Maui.ListBrowser
      * @brief The path of the current place selected.
      */
     property string currentPath
+
+    /**
+     * @brief A list of place paths to hide from the browser UI.
+     */
+    property var hiddenPaths : []
     
     /**
      * @brief Emitted when a entry has been clicked.
      * @param path the URL path of the entry 
      */
     signal placeClicked (string path)
+
+    function isPathHidden(path)
+    {
+        const candidate = path ? path.toString() : ""
+
+        for (var i = 0; i < hiddenPaths.length; ++i)
+        {
+            const hiddenPath = hiddenPaths[i]
+            if ((hiddenPath ? hiddenPath.toString() : "") === candidate)
+            {
+                return true
+            }
+        }
+
+        return false
+    }
     
     Maui.Theme.colorSet: Maui.Theme.View
     Maui.Theme.inherit: false    
@@ -125,7 +146,7 @@ Maui.ListBrowser
         MenuItem
         {
             text: i18nd("mauikitfilebrowsing", "Remove")
-            Maui.Theme.textColor: Maui.Theme.negativeTextColor
+            Maui.Controls.status: Maui.Controls.Negative
             onTriggered: list.removePlace(control.currentIndex)
         }
     }
@@ -153,11 +174,13 @@ Maui.ListBrowser
             
             delegate: Maui.GridBrowserDelegate
             {
-                Layout.preferredHeight: Math.min(50, width)
-                Layout.preferredWidth: 50
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                readonly property bool hiddenPlace: control.isPathHidden(model.path)
+                Layout.preferredHeight: hiddenPlace ? 0 : Math.min(50, width)
+                Layout.preferredWidth: hiddenPlace ? 0 : 50
+                Layout.fillWidth: !hiddenPlace
+                Layout.fillHeight: !hiddenPlace
                 flat: false
+                visible: !hiddenPlace
                 isCurrentItem: control.currentPath === model.path
                 iconSource: model.icon +  (Qt.platform.os == "android" || Qt.platform.os == "osx" ? ("-sidebar") : "")
                 iconSizeHint: Maui.Style.iconSize
@@ -175,12 +198,16 @@ Maui.ListBrowser
     
     delegate: Maui.ListDelegate
     {
+        readonly property bool hiddenPlace: control.isPathHidden(model.path)
         width: ListView.view.width
+        height: hiddenPlace ? 0 : implicitHeight
         iconSize: control.iconSize
         labelVisible: true
         iconVisible: true
         label: model.label
         iconName: model.icon
+        visible: !hiddenPlace
+        enabled: !hiddenPlace
         
         onClicked:
         {
