@@ -166,8 +166,6 @@ FMList::FMList(QObject *parent)
 
         for (const auto &item : std::as_const(res.content)) {
             const auto index = this->indexOf(FMH::MODEL_KEY::PATH, item[FMH::MODEL_KEY::PATH]);
-            qDebug() << "SUPOSSED TO REMOVED THIS FORM THE LIST" << index << this->list.count() << item[FMH::MODEL_KEY::PATH];
-
             this->remove(index);
         }
 
@@ -183,7 +181,6 @@ FMList::FMList(QObject *parent)
     });
 
     connect(this->fm, &FM::pathContentChanged, [this](const QUrl &path) {
-        qDebug() << "FOLDER PATH CHANGED" << path;
         if (path != this->path)
             return;
         this->sortList();
@@ -299,8 +296,6 @@ FMH::MODEL_LIST FMList::getTagContent(const QString &tag, const QStringList &fil
 
 void FMList::setList()
 {
-    qDebug() << "PATHTYPE FOR URL" << pathType << this->path.toString() << this->filters << this;
-
     if(this->path.isEmpty() || !m_autoLoad)
     {
         return;
@@ -693,30 +688,11 @@ void FMList::paste()
     const auto urls = clipboardUrls(mimeData);
     const auto cut = clipboardCutOperation(mimeData);
 
-    qDebug() << "FMList::paste clipboard state"
-             << "destination" << this->path
-             << "formats" << mimeData->formats()
-             << "hasUrls" << mimeData->hasUrls()
-             << "hasText" << mimeData->hasText()
-             << "hasImage" << mimeData->hasImage()
-             << "parsedUrls" << urls
-             << "cut" << cut
-             << "kdeCutData" << mimeData->data(QStringLiteral("application/x-kde-cutselection"))
-             << "gnomeCopiedFilesPreview" << QString::fromUtf8(mimeData->data(QStringLiteral("x-special/gnome-copied-files"))).left(200)
-             << "uriListPreview" << QString::fromUtf8(mimeData->data(QStringLiteral("text/uri-list"))).left(200)
-             << "textPreview" << mimeData->text().left(200);
-
     if (mimeData->hasImage())
     {
-        qDebug() << "FMList::paste handling image clipboard payload";
         saveImageFile(qvariant_cast<QImage>(mimeData->imageData()));
     } else if (!urls.isEmpty())
     {
-        qDebug() << "FMList::paste dispatching file operation"
-                 << (cut ? "cut" : "copy")
-                 << "urls" << urls
-                 << "destination" << this->path;
-
         if (cut) {
             this->fm->cut(urls, this->path);
             QGuiApplication::clipboard()->clear();
@@ -726,7 +702,6 @@ void FMList::paste()
 
     } else if (mimeData->hasText())
     {
-        qDebug() << "FMList::paste falling back to saving clipboard text into a file";
         saveTextFile(mimeData->text(), QStringLiteral("txt"));
     } else
     {
@@ -778,8 +753,6 @@ void FMList::copyInto(const QStringList &urls)
         return;
     }
 
-    qDebug() << "FMList::copyInto" << "sourceUrls" << urls << "normalizedUrls" << normalizeUrls(urls) << "destination" << this->path;
-
     this->fm->copy(normalizeUrls(urls), this->path);
 }
 
@@ -790,8 +763,6 @@ void FMList::cutInto(const QStringList &urls)
         qWarning() << "FMList::cutInto aborted because destination is read-only" << this->path;
         return;
     }
-
-    qDebug() << "FMList::cutInto" << "sourceUrls" << urls << "normalizedUrls" << normalizeUrls(urls) << "destination" << this->path;
 
     this->fm->cut(normalizeUrls(urls), this->path);
 }
@@ -897,8 +868,6 @@ void FMList::search(const QString &query, bool recursive)
         this->setStatus({PathStatus::ERROR, i18n("Error"), i18n("No path to perform the search"), QStringLiteral("document-info"), true, false});
     }
 
-    qDebug() << "SEARCHING FOR" << query << this->path;
-
     if (!this->path.isLocalFile() || !recursive)
     { //if the path is not local then search will not be performed and instead will be filtered
         qWarning() << "URL recived is not a local file. So search will only filter the content" << this->path;
@@ -925,10 +894,8 @@ void FMList::search(const QString &query, bool recursive)
 
 void FMList::filterContent(const QString &query, const QUrl &path)
 {
-    if (this->list.isEmpty()) {
-        qDebug() << "Can not filter content. List is empty";
+    if (this->list.isEmpty())
         return;
-    }
 
     QFutureWatcher<FMStatic::PATH_CONTENT> *watcher = new QFutureWatcher<FMStatic::PATH_CONTENT>;
     connect(watcher, &QFutureWatcher<FMH::MODEL_LIST>::finished, [=]() {
