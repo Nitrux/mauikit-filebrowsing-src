@@ -20,8 +20,8 @@ ecm_add_qml_module(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     "org.mauikit.controls")
 
 set_target_properties(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
+    VERSION ${MAUIKIT_SO_VERSION}
+    SOVERSION ${MAUIKIT_SO_VERSION}
     EXPORT_NAME "FileBrowsing")
 
 add_library(MauiKit${MAUI_MAJOR_VERSION}::FileBrowsing ALIAS MauiKitFileBrowsing${MAUI_MAJOR_VERSION})
@@ -184,5 +184,4 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/filebrowsing_export.h
     DESTINATION ${KDE_INSTALL_INCLUDEDIR}/MauiKit${MAUI_MAJOR_VERSION}/FileBrowsing
     COMPONENT Devel)
-
 

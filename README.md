@@ -1,25 +1,17 @@
-<!--
-SPDX-FileCopyrightText: 2020 Carl Schwan <carl@carlschwan.eu>
-
-SPDX-License-Identifier: BSD-2-Clause
--->
-
 # MauiKit FileBrowsing
 
-## Introduction
+![](https://mauikit.org/wp-content/uploads/2018/12/maui_project_logo.png)
 
-FileBrowsing is a MauiKit Framework to work with local and remote files.
+_File browsing and file management components for MauiKit applications._
 
+# Issues
 
-## Examples
+If you find problems with the contents of this repository, please create an issue and use the **🐞 Bug report** template.
 
-An example can be found in [the examples folder](examples).
+## Submitting a bug report
 
-## License
+Before submitting a bug, you should look at the [existing bug reports](https://github.com/Nitrux/mauikit-filebrowsing-src/issues) to verify that no one has reported the bug already.
 
-MauiKit FileBrowsing is a licensed under the Lesser General Public License version
-2.1 or later. A copy of the license can be found in
-[this repo](LICENSES/LGPL-2.1-or-later.txt).
+©2026 Nitrux Latinoamericana S.C.
 
-The examples are licensed under the 2-Clause BSD, that can be found in
-[here](LICENSES/BSD-2-Clause.txt).
+---
