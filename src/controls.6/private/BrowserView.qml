@@ -443,28 +443,28 @@ Maui.AltBrowser
             visible: active
         }
 
-        onClicked: (mouse) =>
-                   {
-                       if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ControlModifier))
-                       {
-                           control.itemsSelected([index])
-                       }else if((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ShiftModifier))
-                       {
-                           // var lastSelectedIndex = findLastSelectedIndex(control.listView.flickable, control.listView.count)
+        onClicked: function(mouse)
+        {
+            if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ControlModifier))
+            {
+                control.itemsSelected([index])
+            } else if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ShiftModifier))
+            {
+                // var lastSelectedIndex = findLastSelectedIndex(control.listView.flickable, control.listView.count)
 
-                           // if(lastSelectedIndex < 0)
-                           // {
-                           //     return
-                           // }
-                           control.itemsSelected(control.range(control.currentIndex, index))
+                // if(lastSelectedIndex < 0)
+                // {
+                //     return
+                // }
+                control.itemsSelected(control.range(control.currentIndex, index))
 
-                       }else
-                       {
-                           control.itemClicked(index)
-                       }
+            } else
+            {
+                control.itemClicked(index)
+            }
 
-                       control.currentIndex = index
-                   }
+            control.currentIndex = index
+        }
 
         onDoubleClicked:
         {
@@ -487,18 +487,18 @@ Maui.AltBrowser
             control.itemRightClicked(index)
         }
 
-        onToggled: (state) =>
-                   {
-                       control.currentIndex = index
-                       control.itemToggled(index, state)
-                   }
+        onToggled: function(state)
+        {
+            control.currentIndex = index
+            control.itemToggled(index, state)
+        }
 
-        onContentDropped: (drop) =>
-                          {
-                              _dropMenu.urls = drop.urls.join(",")
-                              _dropMenu.target = model.path
-                              _dropMenu.show()
-                          }
+        onContentDropped: function(drop)
+        {
+            _dropMenu.urls = drop.urls.join(",")
+            _dropMenu.target = model.path
+            _dropMenu.show()
+        }
 
         ListView.onRemove:
         {
@@ -603,27 +603,27 @@ Maui.AltBrowser
                 active: control.delegateInjector
             }
 
-            onClicked: (mouse) =>
-                       {
-                           if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ControlModifier))
-                           {
-                               control.itemsSelected([index])
-                           }else if((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ShiftModifier))
-                           {
-                               // var lastSelectedIndex = findLastSelectedIndex(control.gridView.flickable, index)
+            onClicked: function(mouse)
+            {
+                if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ControlModifier))
+                {
+                    control.itemsSelected([index])
+                } else if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ShiftModifier))
+                {
+                    // var lastSelectedIndex = findLastSelectedIndex(control.gridView.flickable, index)
 
-                               // if(lastSelectedIndex < 0)
-                               // {
-                               //     return
-                               // }
-                               // control.itemsSelected(control.range(lastSelectedIndex, index))
-                               control.itemsSelected(control.range(control.currentIndex, index))
-                           }else
-                           {
-                               control.itemClicked(index)
-                           }
-                           control.currentIndex = index
-                       }
+                    // if(lastSelectedIndex < 0)
+                    // {
+                    //     return
+                    // }
+                    // control.itemsSelected(control.range(lastSelectedIndex, index))
+                    control.itemsSelected(control.range(control.currentIndex, index))
+                } else
+                {
+                    control.itemClicked(index)
+                }
+                control.currentIndex = index
+            }
 
             onDoubleClicked:
             {
@@ -646,19 +646,19 @@ Maui.AltBrowser
                 control.itemRightClicked(index)
             }
 
-            onToggled: (state) =>
-                       {
-                           control.currentIndex = index
+            onToggled: function(state)
+            {
+                control.currentIndex = index
 
-                           control.itemToggled(index, state)
-                       }
+                control.itemToggled(index, state)
+            }
 
-            onContentDropped: (drop) =>
-                              {
-                                  _dropMenu.urls = drop.urls.join(",")
-                                  _dropMenu.target = model.path
-                                  _dropMenu.show()
-                              }
+            onContentDropped: function(drop)
+            {
+                _dropMenu.urls = drop.urls.join(",")
+                _dropMenu.target = model.path
+                _dropMenu.show()
+            }
 
             Connections
             {

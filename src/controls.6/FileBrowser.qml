@@ -1189,7 +1189,9 @@ Maui.Page
      **/
     function addToSelection(item)
     {
-        if(control.selectionBar == null || item.path.startsWith("tags://") || item.path.startsWith("applications://"))
+        if (control.selectionBar == null || !item || typeof item.path !== "string"
+                || item.path.startsWith("tags://")
+                || item.path.startsWith("applications://"))
         {
             return
         }
