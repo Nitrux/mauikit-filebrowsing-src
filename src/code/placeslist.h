@@ -112,6 +112,12 @@ public Q_SLOTS:
     void requestSetup (const int &index);
 
     /**
+     * @brief Request to teardown or unmount the device type entry at the given index
+     * @param index index position of the entry
+     */
+    void requestTeardown (const int &index);
+
+    /**
      * @brief Add a location to the bookmarks sections
      * @param url The URL path of the location or directory
      */
@@ -154,4 +160,10 @@ Q_SIGNALS:
      * @brief Emitted when a new bookmark entry has been added
      */
     void bookmarksChanged();
+
+    /**
+     * @brief Emitted when the backend reports an operation error.
+     * @param message the backend error message
+     */
+    void operationError(const QString &message);
 };

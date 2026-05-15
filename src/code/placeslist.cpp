@@ -27,6 +27,7 @@
 #ifdef KIO_AVAILABLE
 #include <KFilePlacesModel>
 #include <Solid/Device>
+#include <Solid/SolidNamespace>
 #else
 #include <MauiKit4/Core/appsettings.h>
 #endif
@@ -64,6 +65,14 @@ PlacesList::PlacesList(QObject *parent)
     connect(this->model, &KFilePlacesModel::reloaded, this, &PlacesList::setList);
     
     connect(this->model, &KFilePlacesModel::setupDone, this, &PlacesList::setList);
+
+    connect(this->model, &KFilePlacesModel::teardownDone, this, [this](const QModelIndex &, Solid::ErrorType, const QVariant &) {
+        this->setList();
+    });
+
+    connect(this->model, &KFilePlacesModel::errorMessage, this, [this](const QString &message) {
+        Q_EMIT this->operationError(message);
+    });
     
     connect(this->model, &KFilePlacesModel::rowsInserted, [this](const QModelIndex, int, int) 
             {
@@ -322,6 +331,20 @@ void PlacesList::requestSetup(const int &index)
 #endif
 }
 
+void PlacesList::requestTeardown(const int &index)
+{
+    if (index >= this->list.size() || index < 0)
+        return;
+
+#ifdef KIO_AVAILABLE
+    const auto item = this->list.at(index);
+    if(m_devices.contains(item[FMH::MODEL_KEY::UDI]))
+    {
+        this->model->requestTeardown(m_devices.value(item[FMH::MODEL_KEY::UDI]));
+    }
+#endif
+}
+
 void PlacesList::addBookmark(const QUrl& url)
 {
 #ifdef KIO_AVAILABLE
@@ -363,4 +386,3 @@ bool PlacesList::containsGroup(const int& group)
 {
     return this->groups.contains(group);
 }
-
