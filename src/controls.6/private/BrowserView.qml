@@ -70,12 +70,18 @@ Maui.AltBrowser
         {
             id: _commonFMList
             path: control.path
+            // If user is already inside a hidden local path (for example ~/.config),
+            // force hidden listing so the directory content is not unintentionally empty.
+            readonly property bool _forceHiddenForCurrentPath: {
+                const currentPath = control.path ? control.path.toString() : ""
+                return currentPath.startsWith("file://") && /\/\.[^/]+(\/|$)/.test(currentPath)
+            }
             onSortByChanged: if(settings.group) groupBy()
             onlyDirs: settings.onlyDirs
             filterType: settings.filterType
             filters: settings.filters
             sortBy: settings.sortBy
-            hidden: settings.showHiddenFiles
+            hidden: settings.showHiddenFiles || _forceHiddenForCurrentPath
             foldersFirst: settings.foldersFirst
         }
 

@@ -339,30 +339,23 @@ Maui.PopupPage
                     {
                         icon.name: browser.settings.viewType === FB.FMList.LIST_VIEW ? "view-list-details" : "view-list-icons"
 
-                        Maui.MenuItemActionRow
+                        Action
                         {
-                            Action
-                            {
-                                icon.name: "view-hidden"
-                                //                        text: i18nd("mauikitfilebrowsing", "Hidden Files")
-                                checkable: true
-                                checked: browser.settings.showHiddenFiles
-                                onTriggered: browser.settings.showHiddenFiles = !browser.settings.showHiddenFiles
-                            }
-
-                            Action
-                            {
-                                icon.name: "folder-new"
-                                onTriggered: browser.newItem()
-                            }
+                            text: i18nd("mauikitfilebrowsing", "Hidden Files")
+                            icon.name: "view-hidden"
+                            checkable: true
+                            checked: browser.settings.showHiddenFiles
+                            onTriggered: browser.settings.showHiddenFiles = !browser.settings.showHiddenFiles
                         }
 
-                        Maui.LabelDelegate
+                        Action
                         {
-                            width: parent.width
-                            isSection: true
-                            text: i18nd("mauikitfilebrowsing", "View type")
+                            text: i18nd("mauikitfilebrowsing", "New Folder")
+                            icon.name: "folder-new"
+                            onTriggered: browser.newItem()
                         }
+
+                        MenuSeparator {}
 
                         Action
                         {
@@ -396,13 +389,6 @@ Maui.PopupPage
                         }
 
                         MenuSeparator {}
-
-                        Maui.LabelDelegate
-                        {
-                            width: parent.width
-                            isSection: true
-                            text: i18nd("mauikitfilebrowsing", "Sort by")
-                        }
 
                         Action
                         {

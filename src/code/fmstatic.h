@@ -213,6 +213,23 @@ public:
     };
 
     /**
+     * @brief Extra suffix filters for textual configuration-like files that are
+     * often not covered by MIME-derived suffix lists in some environments.
+     */
+    inline static const QStringList TEXT_EXTRA_FILTERS = {
+                                                          QStringLiteral("*.conf"),
+                                                          QStringLiteral("*.cfg"),
+                                                          QStringLiteral("*.ini"),
+                                                          QStringLiteral("*.rc"),
+                                                          QStringLiteral("*.desktop"),
+                                                          QStringLiteral("*.service"),
+                                                          QStringLiteral("*.env"),
+                                                          QStringLiteral("*.toml"),
+                                                          QStringLiteral("*.yaml"),
+                                                          QStringLiteral("*.yml"),
+                                                          QStringLiteral("*.json")};
+
+    /**
      * @brief Convenient map set of file type extensions.
      * The values make use of the regex wildcard operator [*] meant for filtering a directory contents, for example.
      * `FILTER_LIST[FILTER_TYPE::AUDIO]` could possible return something alike `["*.mp3", "*.mp4", "*.mpeg", "*.wav"]` etc.
@@ -225,7 +242,7 @@ public:
                                                                                       func)},
                                                                  {FILTER_TYPE::TEXT,
                                                                   getMimeTypeSuffixes(FILTER_TYPE::TEXT,
-                                                                                      func)},
+                                                                                      func) + TEXT_EXTRA_FILTERS},
                                                                  {FILTER_TYPE::DOCUMENT,
                                                                   getMimeTypeSuffixes(FILTER_TYPE::DOCUMENT,
                                                                                       func)},
