@@ -311,7 +311,10 @@ void Syncing::saveTo(const QByteArray &array, const QUrl &path)
     } else
         file.remove();
 
-    file.open(QIODevice::WriteOnly);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qDebug() << "ERROR(SAVE)" << file.errorString() << path;
+        return;
+    }
     file.write(array);
     file.close();
 
