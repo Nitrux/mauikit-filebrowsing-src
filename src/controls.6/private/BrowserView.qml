@@ -390,14 +390,44 @@ Maui.AltBrowser
         isSection: true
     }
 
+    function mimeFallbackIcon(mimeValue)
+    {
+        const mime = String(mimeValue || "")
+
+        if (mime === "inode/directory")
+            return "folder"
+        if (mime.startsWith("audio/"))
+            return "audio-x-generic"
+        if (mime.startsWith("video/"))
+            return "video-x-generic"
+        if (mime.startsWith("image/"))
+            return "image-x-generic"
+        if (mime.startsWith("text/"))
+            return "text-x-generic"
+
+        if (mime.length > 0)
+            return mime.replace("/", "-")
+
+        return "application-octet-stream"
+    }
+
     listDelegate: Maui.ListBrowserDelegate
     {
         id: delegate
         readonly property string path : model.path
+        readonly property string resolvedIconSource: (() =>
+                                                     {
+                                                         const icon = String(model.icon || "")
+                                                         if (icon.length > 0)
+                                                             return icon
+
+                                                         const mime = String(model.mime || "")
+                                                         return control.mimeFallbackIcon(mime)
+                                                     })()
 
         width: ListView.view.width
 
-        iconSource: model.icon
+        iconSource: resolvedIconSource
 
         label1.text: model.label ? model.label : ""
         label2.text: control.objectName === "searchView" ? model.path : ""
@@ -555,6 +585,15 @@ Maui.AltBrowser
         {
             id: delegate
             readonly property string path : model.path
+            readonly property string resolvedIconSource: (() =>
+                                                         {
+                                                             const icon = String(model.icon || "")
+                                                             if (icon.length > 0)
+                                                                 return icon
+
+                                                             const mime = String(model.mime || "")
+                                                             return control.mimeFallbackIcon(mime)
+                                                         })()
 
             template.imageWidth: control.gridView.itemSize
             template.imageHeight: control.gridView.itemSize
@@ -567,7 +606,7 @@ Maui.AltBrowser
             imageSource: settings.showThumbnails ? model.thumbnail : ""
             template.fillMode: Image.PreserveAspectFit
             template.maskRadius: 0
-            iconSource: model.icon
+            iconSource: resolvedIconSource
             label1.text: model.label
             label2.visible: delegate.height > 160 && model.mime
             label2.font.pointSize: Maui.Style.fontSizes.tiny

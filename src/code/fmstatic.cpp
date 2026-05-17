@@ -544,10 +544,6 @@ static const QUrl thumbnailUrl(const QUrl &url, const QString &mimetype)
     if (FMStatic::checkFileType(FMStatic::FILTER_TYPE::FONT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::TEXT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::AUDIO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::DOCUMENT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::VIDEO, mimetype) || url.toString().endsWith(QStringLiteral(".appimage"), Qt::CaseInsensitive)) {
         return QUrl(QStringLiteral("image://thumbnailer/") + url.toString());
     }
-    
-    //      if (KIO::PreviewJob::supportedMimeTypes().contains(mimetype)) {
-    //         return QUrl("image://thumbnailer/" + url.toString());
-    //     }
 #endif
     
     if (FMStatic::checkFileType(FMStatic::FILTER_TYPE::IMAGE, mimetype)) {
