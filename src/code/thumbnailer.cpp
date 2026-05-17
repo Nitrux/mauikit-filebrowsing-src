@@ -4,7 +4,6 @@
 #include <KIO/PreviewJob>
 #endif
 
-#include <QDebug>
 #include <QImage>
 #include <QGuiApplication>
 
@@ -25,15 +24,12 @@ AsyncImageResponse::AsyncImageResponse(const QString &id, const QSize &requested
 
     KIO::PreviewJob::setDefaultDevicePixelRatio(qApp->devicePixelRatio());
     static const QStringList plugins = KIO::PreviewJob::availablePlugins();
-    //     qDebug() << plugins << KIO::PreviewJob::defaultPlugins();
     const QUrl sourceUrl = QUrl::fromUserInput(id, QStringLiteral("/"), QUrl::AssumeLocalFile);
-    qDebug() << "[Maui][Thumbnailer] request" << sourceUrl << "requested=" << requestedSize << "effective=" << effectiveSize;
     m_job = new KIO::PreviewJob(KFileItemList() << KFileItem(sourceUrl), effectiveSize, &plugins);
 
     connect(m_job, &KIO::PreviewJob::gotPreview, this, [this](KFileItem, QPixmap pixmap) {
         if (m_done)
             return;
-        qDebug() << "[Maui][Thumbnailer] success" << m_id << "size=" << pixmap.size();
         m_image = pixmap.toImage();
         finish();
     });
@@ -41,7 +37,6 @@ AsyncImageResponse::AsyncImageResponse(const QString &id, const QSize &requested
     connect(m_job, &KIO::PreviewJob::failed, this, [this](KFileItem) {
         if (m_done)
             return;
-        qWarning() << "[Maui][Thumbnailer] failed" << m_id << "requested=" << m_requestedSize;
         m_error.clear();
         cancel();
     });
