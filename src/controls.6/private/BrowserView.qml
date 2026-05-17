@@ -411,6 +411,31 @@ Maui.AltBrowser
         return "application-octet-stream"
     }
 
+    function thumbnailSourceForEntry(mimeValue, thumbnailValue, sizeValue)
+    {
+        if (!settings.showThumbnails)
+            return ""
+
+        const thumb = String(thumbnailValue || "")
+        if (thumb.length === 0)
+            return ""
+
+        const mime = String(mimeValue || "")
+        const parsedSize = parseInt(String(sizeValue || "0"), 10)
+        const isZeroSizedFile = !isNaN(parsedSize) && parsedSize === 0
+
+        // Avoid wasting thumbnail work for empty files and fall back to the MIME icon.
+        if (isZeroSizedFile)
+            return ""
+
+        // Audio preview thumbnails are often unstable/missing in generic BrowserView usage.
+        // Force MIME icon rendering here so all apps using this view get consistent output.
+        if (mime.startsWith("audio/"))
+            return ""
+
+        return thumb
+    }
+
     listDelegate: Maui.ListBrowserDelegate
     {
         id: delegate
@@ -440,7 +465,7 @@ Maui.AltBrowser
         tooltipText: model.path
 
         checkable: control.selectionMode || checked
-        imageSource: settings.showThumbnails && height > 32 ? model.thumbnail : ""
+        imageSource: height > 32 ? control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size) : ""
         checked: selectionBar ? selectionBar.contains(model.path) : false
         template.iconContainer.opacity: model.hidden == "true" ? 0.5 : 1
         draggable: true
@@ -603,7 +628,7 @@ Maui.AltBrowser
 
             template.labelSizeHint: 42
             iconSizeHint: _private.gridIconSize
-            imageSource: settings.showThumbnails ? model.thumbnail : ""
+            imageSource: control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size)
             template.fillMode: Image.PreserveAspectFit
             template.maskRadius: 0
             iconSource: resolvedIconSource
