@@ -428,7 +428,6 @@ Maui.AltBrowser
         const parsedSize = parseInt(String(sizeValue || "0"), 10)
         const isZeroSizedFile = !isNaN(parsedSize) && parsedSize === 0
 
-        // Avoid wasting thumbnail work for empty files and fall back to the MIME icon.
         if (isZeroSizedFile)
             return ""
 
@@ -505,7 +504,7 @@ Maui.AltBrowser
             visible: false
             asynchronous: true
             cache: false
-            source: rawImageSource
+            source: String(model.thumbnail || "")
             sourceSize.width: 256
             sourceSize.height: 256
         }
@@ -689,7 +688,7 @@ Maui.AltBrowser
                 visible: false
                 asynchronous: true
                 cache: false
-                source: rawImageSource
+                source: String(model.thumbnail || "")
                 sourceSize.width: 256
                 sourceSize.height: 256
             }

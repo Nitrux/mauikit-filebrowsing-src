@@ -157,6 +157,13 @@ Maui.Page
     readonly property alias browser : _browser
 
     /**
+     * @brief Optional image source used as fallback artwork for audio files that have no embedded thumbnail.
+     * Forwarded to the internal BrowserView. Leave empty to show only the MIME icon.
+     * @property string FileBrowser::audioFallbackImageSource
+     */
+    property alias audioFallbackImageSource: _browser.audioFallbackImageSource
+
+    /**
      * @brief Drop area component, for dropping files.
      * By default some of the drop actions are handled, for other type of URIs this alias can be used to handle those.
      *
