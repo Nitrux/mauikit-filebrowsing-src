@@ -226,6 +226,13 @@ public Q_SLOTS:
     bool toggleFav(const QUrl &url);
 
     /**
+     * @brief Returns all file URLs currently marked as favorite, in a single query.
+     * Use this to build a local cache instead of calling isFav() per item.
+     * @return list of URL strings tagged as "fav"
+     */
+    QStringList favUrls();
+
+    /**
      * @brief Shortcut for getting a list of file URLs associated to a tag, the resulting list of URLs can be filtered by regular expression or by mime-type and limited
      * @param tag the tag to look up
      * @param filters the regular expressions list

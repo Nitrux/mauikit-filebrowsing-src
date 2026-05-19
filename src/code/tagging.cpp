@@ -428,7 +428,18 @@ bool Tagging::unFav(const QUrl &url)
 bool Tagging::isFav(const QUrl &url, const bool &strict)
 {
     Q_UNUSED(strict)
-    
+
     return urlTagExists(url.toString(), QStringLiteral("fav"));
+}
+
+QStringList Tagging::favUrls()
+{
+    QStringList urls;
+    auto query = this->db()->getQuery(QStringLiteral("SELECT url FROM TAGS_URLS WHERE tag = 'fav'"));
+    if (query.exec()) {
+        while (query.next())
+            urls << query.value(0).toString();
+    }
+    return urls;
 }
 

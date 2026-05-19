@@ -125,7 +125,6 @@ bool TAGDB::checkExistance(const QString &tableName, const QString &searchId, co
 
 bool TAGDB::checkExistance(const QString &queryStr) const
 {
-    qDebug() << "CHECKIGN QUERY TAG" << queryStr;
     auto query = this->getQuery(queryStr);
 
     if (query.exec()) {

@@ -118,6 +118,12 @@ Maui.AltBrowser
     property int listItemSize : Maui.Style.rowHeight
 
     /**
+     * @brief Optional image source used when an audio file has no embedded artwork thumbnail.
+     * Leave empty to keep the default icon-only fallback.
+     */
+    property string audioFallbackImageSource: ""
+
+    /**
      * @brief An alias to access the grouped setting preferences for tweaking the file listing properties.
      * @see BrowserSettings
      * @property BrowserSettings BrowserView::settings
@@ -416,11 +422,9 @@ Maui.AltBrowser
         if (!settings.showThumbnails)
             return ""
 
-        const thumb = String(thumbnailValue || "")
-        if (thumb.length === 0)
-            return ""
-
         const mime = String(mimeValue || "")
+        const thumb = String(thumbnailValue || "")
+
         const parsedSize = parseInt(String(sizeValue || "0"), 10)
         const isZeroSizedFile = !isNaN(parsedSize) && parsedSize === 0
 
@@ -428,12 +432,36 @@ Maui.AltBrowser
         if (isZeroSizedFile)
             return ""
 
-        // Audio preview thumbnails are often unstable/missing in generic BrowserView usage.
-        // Force MIME icon rendering here so all apps using this view get consistent output.
-        if (mime.startsWith("audio/"))
+        if (thumb.length === 0)
+        {
+            if (mime.startsWith("audio/") && control.audioFallbackImageSource.length > 0)
+                return control.audioFallbackImageSource
+
             return ""
+        }
 
         return thumb
+    }
+
+    function effectiveAudioThumbnailSource(mimeValue, sourceValue, imageStatus, paintedWidth, paintedHeight)
+    {
+        const mime = String(mimeValue || "")
+        const source = String(sourceValue || "")
+
+        if (!mime.startsWith("audio/") || control.audioFallbackImageSource.length === 0)
+            return source
+
+        if (source.length === 0)
+            return control.audioFallbackImageSource
+
+        const fromThumbnailer = source.startsWith("image://thumbnailer/")
+        const failed = (imageStatus === Image.Error)
+            || (imageStatus === Image.Ready && paintedWidth <= 0 && paintedHeight <= 0)
+
+        if (fromThumbnailer && failed)
+            return control.audioFallbackImageSource
+
+        return source
     }
 
     listDelegate: Maui.ListBrowserDelegate
@@ -465,10 +493,22 @@ Maui.AltBrowser
         tooltipText: model.path
 
         checkable: control.selectionMode || checked
-        imageSource: height > 32 ? control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size) : ""
+        readonly property string rawImageSource: height > 32 ? control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size) : ""
+        imageSource: control.effectiveAudioThumbnailSource(model.mime, rawImageSource, _audioArtworkProbe.status, _audioArtworkProbe.paintedWidth, _audioArtworkProbe.paintedHeight)
         checked: selectionBar ? selectionBar.contains(model.path) : false
         template.iconContainer.opacity: model.hidden == "true" ? 0.5 : 1
         draggable: true
+
+        Image
+        {
+            id: _audioArtworkProbe
+            visible: false
+            asynchronous: true
+            cache: false
+            source: rawImageSource
+            sourceSize.width: 256
+            sourceSize.height: 256
+        }
 
         Drag.keys: ["text/uri-list"]
         Drag.mimeData: {
@@ -575,19 +615,17 @@ Maui.AltBrowser
 
             function onUriRemoved(uri)
             {
-                if(uri === model.path)
-                    delegate.checked = false
+                delegate.checked = Qt.binding(function() { return selectionBar ? selectionBar.contains(model.path) : false })
             }
 
             function onUriAdded(uri)
             {
-                if(uri === model.path)
-                    delegate.checked = true
+                delegate.checked = Qt.binding(function() { return selectionBar ? selectionBar.contains(model.path) : false })
             }
 
             function onCleared()
             {
-                delegate.checked = false
+                delegate.checked = Qt.binding(function() { return selectionBar ? selectionBar.contains(model.path) : false })
             }
         }
     }
@@ -628,7 +666,8 @@ Maui.AltBrowser
 
             template.labelSizeHint: 42
             iconSizeHint: _private.gridIconSize
-            imageSource: control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size)
+            readonly property string rawImageSource: control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size)
+            imageSource: control.effectiveAudioThumbnailSource(model.mime, rawImageSource, _audioArtworkProbe.status, _audioArtworkProbe.paintedWidth, _audioArtworkProbe.paintedHeight)
             template.fillMode: Image.PreserveAspectFit
             template.maskRadius: 0
             iconSource: resolvedIconSource
@@ -643,6 +682,17 @@ Maui.AltBrowser
             checked: (selectionBar ? selectionBar.contains(model.path) : false)
             draggable: true
             template.iconContainer.opacity: model.hidden == "true" ? 0.5 : 1
+
+            Image
+            {
+                id: _audioArtworkProbe
+                visible: false
+                asynchronous: true
+                cache: false
+                source: rawImageSource
+                sourceSize.width: 256
+                sourceSize.height: 256
+            }
 
             Drag.keys: ["text/uri-list"]
             Drag.mimeData: {
@@ -736,19 +786,17 @@ Maui.AltBrowser
 
                 function onUriRemoved(uri)
                 {
-                    if(uri === model.path)
-                        delegate.checked = false
+                    delegate.checked = Qt.binding(function() { return selectionBar ? selectionBar.contains(model.path) : false })
                 }
 
                 function onUriAdded(uri)
                 {
-                    if(uri === model.path)
-                        delegate.checked = true
+                    delegate.checked = Qt.binding(function() { return selectionBar ? selectionBar.contains(model.path) : false })
                 }
 
-                function onCleared(uri)
+                function onCleared()
                 {
-                    delegate.checked = false
+                    delegate.checked = Qt.binding(function() { return selectionBar ? selectionBar.contains(model.path) : false })
                 }
             }
         }
