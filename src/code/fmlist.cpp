@@ -148,6 +148,10 @@ FMList::FMList(QObject *parent)
         }
     });
 
+    connect(this->fm, &FM::pathRedirected, this, [this](const QUrl &from, const QUrl &to) {
+        this->redirectPath(from, to);
+    });
+
     connect(this->fm, &FM::pathContentItemsReady, [this](FMStatic::PATH_CONTENT res) {
         if (res.path != this->path)
             return;
@@ -296,7 +300,7 @@ FMH::MODEL_LIST FMList::getTagContent(const QString &tag, const QStringList &fil
 
 void FMList::setList()
 {
-    if(this->path.isEmpty() || !m_autoLoad)
+    if(this->path.isEmpty() || !m_autoLoad || m_suppressReload)
     {
         return;
     }
@@ -440,20 +444,26 @@ QString FMList::getPath() const
     return this->path.toString();
 }
 
-void FMList::setPath(const QString &path)
+void FMList::applyPath(const QUrl &path_, bool addToHistory, bool emitPathChange)
 {
-    QUrl path_ = QUrl::fromUserInput(path.simplified(), QStringLiteral("/"), QUrl::AssumeLocalFile).adjusted(QUrl::PreferLocalFile | QUrl::StripTrailingSlash | QUrl::NormalizePathSegments);
-
     if (this->path == path_)
         return;
 
     this->path = path_;
-    m_navHistory.appendPath(this->path);
+
+    if (addToHistory)
+        m_navHistory.appendPath(this->path);
 
     this->setStatus({PathStatus::STATUS_CODE::LOADING, i18n("Loading content"), i18n("Almost ready!"), QStringLiteral("view-refresh"), true, false});
 
     const auto __scheme = this->path.scheme();
-    this->pathName = QDir(this->path.toLocalFile()).dirName();
+    if (this->path.isLocalFile()) {
+        this->pathName = QDir(this->path.toLocalFile()).dirName();
+    } else {
+        this->pathName = this->path.fileName();
+        if (this->pathName.isEmpty())
+            this->pathName = this->path.host();
+    }
 
     if (__scheme == FMStatic::PATHTYPE_SCHEME[FMStatic::PATHTYPE_KEY::CLOUD_PATH]) {
         this->pathType = FMList::PATHTYPE::CLOUD_PATH;
@@ -478,6 +488,15 @@ void FMList::setPath(const QString &path)
     } else if (__scheme == FMStatic::PATHTYPE_SCHEME[FMStatic::PATHTYPE_KEY::FISH_PATH]) {
         this->pathType = FMList::PATHTYPE::FISH_PATH;
 
+    } else if (__scheme == QStringLiteral("smb")
+               || __scheme == QStringLiteral("ftp")
+               || __scheme == QStringLiteral("ftps")
+               || __scheme == QStringLiteral("sftp")
+               || __scheme == QStringLiteral("afc")
+               || __scheme == QStringLiteral("dav")
+               || __scheme == QStringLiteral("davs")) {
+        this->pathType = FMList::PATHTYPE::REMOTE_PATH;
+
     } else if (__scheme == FMStatic::PATHTYPE_SCHEME[FMStatic::PATHTYPE_KEY::REMOTE_PATH]) {
         this->pathType = FMList::PATHTYPE::REMOTE_PATH;
 
@@ -487,9 +506,36 @@ void FMList::setPath(const QString &path)
         this->pathType = FMList::PATHTYPE::OTHER_PATH;
     }
 
+    if (!this->path.isLocalFile() && this->pathName.isEmpty()) {
+        if (this->pathType == FMList::PATHTYPE::REMOTE_PATH) {
+            this->pathName = i18n("Remote");
+        } else if (this->pathType == FMList::PATHTYPE::MTP_PATH) {
+            this->pathName = i18n("Drives");
+        }
+    }
+
     Q_EMIT this->pathNameChanged();
     Q_EMIT this->pathTypeChanged();
-    Q_EMIT this->pathChanged();
+
+    if (emitPathChange)
+        Q_EMIT this->pathChanged();
+}
+
+void FMList::setPath(const QString &path)
+{
+    const QUrl path_ = QUrl::fromUserInput(path.simplified(), QStringLiteral("/"), QUrl::AssumeLocalFile).adjusted(QUrl::PreferLocalFile | QUrl::StripTrailingSlash | QUrl::NormalizePathSegments);
+    this->applyPath(path_, true, true);
+}
+
+void FMList::redirectPath(const QUrl &from, const QUrl &to)
+{
+    if (this->path != from || this->path == to)
+        return;
+
+    m_suppressReload = true;
+    m_navHistory.replaceLastPath(from, to);
+    this->applyPath(to, false, true);
+    m_suppressReload = false;
 }
 
 FMList::PATHTYPE FMList::getPathType() const

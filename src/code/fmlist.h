@@ -110,6 +110,15 @@ struct FILEBROWSING_EXPORT NavHistory {
         this->prev_history.append(path);
     }
 
+    bool replaceLastPath(const QUrl &from, const QUrl &to)
+    {
+        if (this->prev_history.isEmpty() || this->prev_history.last() != from)
+            return false;
+
+        this->prev_history.last() = to;
+        return true;
+    }
+
     QUrl getPosteriorPath()
     {
         if (this->post_history.isEmpty())
@@ -383,6 +392,7 @@ public:
 
     QString getPath() const;
     void setPath(const QString &path);
+    void redirectPath(const QUrl &from, const QUrl &to);
 
     QString getPathName() const;
 
@@ -431,6 +441,7 @@ private:
     void filterContent(const QString &query, const QUrl &path);
     void setStatus(const PathStatus &status);
     PathStatus emptyStateStatus() const;
+    void applyPath(const QUrl &path, bool addToHistory, bool emitPathChange);
 
     bool saveImageFile(const QImage &image);
     bool saveTextFile(const QString &data, const QString &format);
@@ -445,6 +456,7 @@ private:
     FMH::MODEL_LIST list = {{}};
 
     bool m_autoLoad = true;
+    bool m_suppressReload = false;
     QUrl path;
     QString pathName = QString();
     QStringList filters = {};

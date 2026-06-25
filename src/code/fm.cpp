@@ -248,6 +248,11 @@ FM::FM(QObject *parent)
         Q_EMIT this->pathContentItemsReady({dirUrl, packItems(items)});
     });
 
+    connect(dirLister, &KCoreDirLister::redirection, this, [&](const QUrl &from, const QUrl &to) {
+        qDebug() << "PATH REDIRECTED" << from << to;
+        Q_EMIT this->pathRedirected(from, to);
+    });
+
     //        connect(dirLister, static_cast<void (KCoreDirLister::*)(const KFileItemList &items)>(&KCoreDirLister::newItems), [&](KFileItemList items)
     //        {
     //            qDebug()<< "MORE NEW ITEMS WERE ADDED";

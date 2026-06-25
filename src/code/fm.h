@@ -206,7 +206,14 @@ Q_SIGNALS:
      * @param items the list of pair of entries that have changed, where first is the old version and second is the new version.
      */
     void pathContentItemsChanged(QVector<QPair<FMH::MODEL, FMH::MODEL>> items);
-    
+
+    /**
+     * @brief Emitted when KIO redirects the requested URL to a different location.
+     * @param from the original URL that was requested
+     * @param to the redirected URL returned by KIO
+     */
+    void pathRedirected(const QUrl &from, const QUrl &to);
+
     /**
      * @brief Emitted when a set of entries in the current location have been removed.
      * @param list the removed contents packaged in a list, with the file information 
