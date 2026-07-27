@@ -174,6 +174,9 @@ Maui.ListBrowser
             
             delegate: Maui.GridBrowserDelegate
             {
+                Maui.Theme.colorSet: Maui.Theme.Button
+                Maui.Theme.inherit: false
+
                 readonly property bool hiddenPlace: control.isPathHidden(model.path)
                 Layout.preferredHeight: hiddenPlace ? 0 : Math.min(50, width)
                 Layout.preferredWidth: hiddenPlace ? 0 : 50

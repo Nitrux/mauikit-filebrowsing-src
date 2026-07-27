@@ -277,28 +277,42 @@ Maui.PopupPage
         
         sideBar.preferredWidth: 200
         sideBar.minimumWidth: 200
-        sideBarContent: Loader
+        sideBarContent: Pane
         {
-            id: sidebarLoader
-            asynchronous: true
+            padding: 0
             anchors.fill: parent
-            
-            sourceComponent: FB.PlacesListBrowser
-            {
-                hiddenPaths: control.hiddenSidebarPaths
+            Maui.Theme.colorSet: Maui.Theme.Window
+            Maui.Theme.inherit: false
 
-                onPlaceClicked: (path) =>
-                                {
-                                    //pageRow.currentIndex = 1
-                                    _browser.openFolder(path)
-                                }
-                
-                currentPath: _browser.currentPath
-                
-                list.groups:  [
-                    FB.FMList.BOOKMARKS_PATH,
-                    FB.FMList.REMOTE_PATH,
-                    FB.FMList.CLOUD_PATH]
+            background: Rectangle
+            {
+                color: Maui.Theme.alternateBackgroundColor
+            }
+
+            contentItem: Loader
+            {
+                id: sidebarLoader
+                asynchronous: true
+
+                sourceComponent: FB.PlacesListBrowser
+                {
+                    anchors.fill: parent
+                    Maui.Theme.colorSet: Maui.Theme.Window
+                    hiddenPaths: control.hiddenSidebarPaths
+
+                    onPlaceClicked: (path) =>
+                                    {
+                                        //pageRow.currentIndex = 1
+                                        _browser.openFolder(path)
+                                    }
+
+                    currentPath: _browser.currentPath
+
+                    list.groups:  [
+                        FB.FMList.BOOKMARKS_PATH,
+                        FB.FMList.REMOTE_PATH,
+                        FB.FMList.CLOUD_PATH]
+                }
             }
         }
         
@@ -306,10 +320,12 @@ Maui.PopupPage
         {
             id: _browserLayout
             anchors.fill: parent
-            
+
+            background: null
             floatingFooter: true
             flickable: _browser.flickable
             headBar.visible: true
+            headerMargins: Maui.Style.contentMargins
             headerColorSet: Maui.Theme.Header
             headBar.farLeftContent: ToolButton
             {
@@ -508,9 +524,16 @@ Maui.PopupPage
                 }
             }
             
+            Item
+            {
+                id: _selectionBarContainer
+                visible: false
+            }
+
             Maui.SelectionBar
             {
                 id: _selectionBar
+                parent: _selectionBarContainer
                 visible: false
                 
                 listDelegate: Maui.ListBrowserDelegate
@@ -532,7 +555,8 @@ Maui.PopupPage
             {
                 id: _browser
                 anchors.fill: parent
-                
+
+                background: null
                 selectionBar: _selectionBar
                 settings.viewType: FB.FMList.LIST_VIEW
                 currentPath: FB.FM.homePath()
