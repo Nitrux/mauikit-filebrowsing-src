@@ -357,7 +357,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "Hidden Files")
+                            text: i18nd("mauikitfilebrowsing", "Hidden Files") || qsTr("Hidden Files")
                             icon.name: "view-hidden"
                             checkable: true
                             checked: browser.settings.showHiddenFiles
@@ -366,7 +366,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "New Folder")
+                            text: i18nd("mauikitfilebrowsing", "New Folder") || qsTr("New Folder")
                             icon.name: "folder-new"
                             onTriggered: browser.newItem()
                         }
@@ -375,7 +375,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "List")
+                            text: i18nd("mauikitfilebrowsing", "List") || qsTr("List")
                             icon.name: "view-list-details"
                             checked: browser.settings.viewType === FB.FMList.LIST_VIEW
                             checkable: true
@@ -390,7 +390,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "Grid")
+                            text: i18nd("mauikitfilebrowsing", "Grid") || qsTr("Grid")
                             icon.name: "view-list-icons"
                             checked:  browser.settings.viewType === FB.FMList.ICON_VIEW
                             checkable: true
@@ -408,7 +408,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "Type")
+                            text: i18nd("mauikitfilebrowsing", "Type") || qsTr("Type")
                             checked: browser.settings.sortBy === FB.FMList.MIME
                             checkable: true
 
@@ -420,7 +420,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "Date")
+                            text: i18nd("mauikitfilebrowsing", "Date") || qsTr("Date")
                             checked: browser.settings.sortBy === FB.FMList.DATE
                             checkable: true
 
@@ -432,7 +432,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "Modified")
+                            text: i18nd("mauikitfilebrowsing", "Modified") || qsTr("Modified")
                             checked: browser.settings.sortBy === FB.FMList.MODIFIED
                             checkable: true
 
@@ -444,7 +444,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "Size")
+                            text: i18nd("mauikitfilebrowsing", "Size") || qsTr("Size")
                             checked: browser.settings.sortBy === FB.FMList.SIZE
                             checkable: true
 
@@ -456,7 +456,7 @@ Maui.PopupPage
 
                         Action
                         {
-                            text: i18nd("mauikitfilebrowsing", "Name")
+                            text: i18nd("mauikitfilebrowsing", "Name") || qsTr("Name")
                             checked:  browser.settings.sortBy === FB.FMList.LABEL
                             checkable: true
 
@@ -470,7 +470,7 @@ Maui.PopupPage
 
                         MenuItem
                         {
-                            text: i18nd("mauikitfilebrowsing", "Show Folders First")
+                            text: i18nd("mauikitfilebrowsing", "Show Folders First") || qsTr("Show Folders First")
                             checked: browser.settings.foldersFirst
                             checkable: true
 
@@ -483,7 +483,7 @@ Maui.PopupPage
                         MenuItem
                         {
                             id: groupAction
-                            text: i18nd("mauikitfilebrowsing", "Group")
+                            text: i18nd("mauikitfilebrowsing", "Group") || qsTr("Group")
                             checkable: true
                             checked: browser.settings.group
                             onTriggered:
