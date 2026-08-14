@@ -138,6 +138,8 @@ Maui.PopupPage
      */
     property alias singleSelection : _selectionBar.singleSelection
 
+    property Component sidebarComponent
+
     /**
      * @brief Sidebar place paths hidden for the file picker use case.
      */
@@ -289,30 +291,32 @@ Maui.PopupPage
                 color: Maui.Theme.alternateBackgroundColor
             }
 
-            contentItem: Loader
+            Component
             {
-                id: sidebarLoader
-                asynchronous: true
+                id: defaultSidebarComponent
 
-                sourceComponent: FB.PlacesListBrowser
+                FB.PlacesListBrowser
                 {
                     anchors.fill: parent
                     Maui.Theme.colorSet: Maui.Theme.Window
                     hiddenPaths: control.hiddenSidebarPaths
 
-                    onPlaceClicked: (path) =>
-                                    {
-                                        //pageRow.currentIndex = 1
-                                        _browser.openFolder(path)
-                                    }
-
+                    onPlaceClicked: (path) => _browser.openFolder(path)
                     currentPath: _browser.currentPath
 
-                    list.groups:  [
+                    list.groups: [
                         FB.FMList.BOOKMARKS_PATH,
                         FB.FMList.REMOTE_PATH,
                         FB.FMList.CLOUD_PATH]
                 }
+            }
+
+            contentItem: Loader
+            {
+                id: sidebarLoader
+                asynchronous: true
+
+                sourceComponent: control.sidebarComponent ? control.sidebarComponent : defaultSidebarComponent
             }
         }
         
