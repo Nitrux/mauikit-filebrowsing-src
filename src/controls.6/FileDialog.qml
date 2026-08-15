@@ -315,8 +315,22 @@ Maui.PopupPage
             {
                 id: sidebarLoader
                 asynchronous: true
+                anchors.bottomMargin: _textField.visible ? _textField.implicitHeight + Maui.Style.space.small * 2 : 0
 
                 sourceComponent: control.sidebarComponent ? control.sidebarComponent : defaultSidebarComponent
+            }
+
+            Maui.TextField
+            {
+                id: _textField
+                visible: control.mode === FileDialog.Modes.Save
+                z: 1
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: Maui.Style.space.small
+                placeholderText: i18nd("mauikitfilebrowsing", "File name...")
+                text: suggestedFileName
             }
         }
         
