@@ -232,7 +232,6 @@ Maui.AltBrowser
 
         function onAreaClicked(mouse)
         {
-            console.log("Area clicked")
             control.currentView.forceActiveFocus()
             control.areaClicked(mouse)
         }

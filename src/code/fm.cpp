@@ -476,3 +476,8 @@ bool FM::copy(const QList<QUrl> &urls, const QUrl &where)
     // 	}
 #endif
 }
+
+bool FM::paste(const QList<QUrl> &urls, const QUrl &where, bool cut)
+{
+    return FMStatic::paste(urls, where, cut);
+}

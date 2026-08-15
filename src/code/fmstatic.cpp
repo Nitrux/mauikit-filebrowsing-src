@@ -1,4 +1,5 @@
 #include "fmstatic.h"
+#include "fileoperation.h"
 #include "placeslist.h"
 #include "tagging.h"
 
@@ -218,16 +219,7 @@ bool FMStatic::copy(const QList<QUrl> &urls, const QUrl &destinationDir)
 {
     qDebug() << "FMStatic::copy requested" << "urls" << urls << "destination" << destinationDir;
 #ifdef KIO_AVAILABLE
-    auto job = KIO::copy(urls, destinationDir);
-    QObject::connect(job, &KJob::result, job, [job, urls, destinationDir]() {
-        qDebug() << "FMStatic::copy result"
-                 << "urls" << urls
-                 << "destination" << destinationDir
-                 << "error" << job->error()
-                 << "errorText" << job->errorString();
-    });
-    job->start();
-    return true;
+    return FileOperation::startCopy(urls, destinationDir);
 #else
     for (const auto &url : std::as_const(urls)) {
         QFileInfo srcFileInfo(url.toLocalFile());
@@ -250,6 +242,21 @@ bool FMStatic::copy(const QList<QUrl> &urls, const QUrl &destinationDir)
         }
     }
     return true;
+#endif
+}
+
+bool FMStatic::paste(const QList<QUrl> &urls, const QUrl &destinationDir, bool cut)
+{
+#ifdef KIO_AVAILABLE
+    if (cut)
+        return FileOperation::startMove(urls, destinationDir, QStringLiteral("paste"));
+
+    return FileOperation::startCopy(urls, destinationDir, QStringLiteral("paste"));
+#else
+    if (cut)
+        return FMStatic::cut(urls, destinationDir);
+
+    return FMStatic::copy(urls, destinationDir);
 #endif
 }
 
@@ -321,9 +328,7 @@ bool FMStatic::removeFiles(const QList<QUrl> &urls)
     }
 
 #ifdef KIO_AVAILABLE
-    auto job = KIO::del(urls);
-    job->start();
-    return true;
+    return FileOperation::startDelete(urls);
 #else
     qDebug() << "ASKED GTO DELETE FILES" << urls;
     for (const auto &url : std::as_const(urls)) {
@@ -389,7 +394,18 @@ bool FMStatic::removeDir(const QUrl &path)
 
 bool FMStatic::rename(const QUrl &url, const QString &name)
 {
-    return FMStatic::cut({url}, QUrl(url.toString().left(url.toString().lastIndexOf(QStringLiteral("/")))), name);
+    const auto parent = QUrl(url.toString().left(url.toString().lastIndexOf(QStringLiteral("/"))));
+    const auto destination = QUrl(parent.toString() + QStringLiteral("/") + name);
+
+#ifdef KIO_AVAILABLE
+    const bool started = FileOperation::startMove({url}, destination, QStringLiteral("rename"));
+    if (started)
+        Tagging::getInstance()->updateUrl(url.toString(), destination.toString());
+
+    return started;
+#else
+    return FMStatic::cut({url}, parent, name);
+#endif
 }
 
 bool FMStatic::createDir(const QUrl &path, const QString &name)

@@ -740,10 +740,10 @@ void FMList::paste()
     } else if (!urls.isEmpty())
     {
         if (cut) {
-            this->fm->cut(urls, this->path);
+            this->fm->paste(urls, this->path, true);
             QGuiApplication::clipboard()->clear();
         } else {
-            this->fm->copy(urls, this->path);
+            this->fm->paste(urls, this->path, false);
         }
 
     } else if (mimeData->hasText())

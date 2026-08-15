@@ -28,6 +28,7 @@ add_library(MauiKit${MAUI_MAJOR_VERSION}::FileBrowsing ALIAS MauiKitFileBrowsing
 
 set(headers
     code/fm.h
+    code/fileoperation.h
     code/fmstatic.h
     code/fmlist.h
     code/placeslist.h
@@ -63,6 +64,9 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     PRIVATE
     code/fm.cpp
     code/fm.h
+
+    code/fileoperation.cpp
+    code/fileoperation.h
 
     code/fmstatic.cpp
     code/fmstatic.h
@@ -113,6 +117,7 @@ ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} SOURCES
     controls.${QT_MAJOR_VERSION}/FavButton.qml
     controls.${QT_MAJOR_VERSION}/FileDialog.qml
     controls.${QT_MAJOR_VERSION}/FileListingDialog.qml
+    controls.${QT_MAJOR_VERSION}/FileOperationDialog.qml
     controls.${QT_MAJOR_VERSION}/NewTagDialog.qml
     controls.${QT_MAJOR_VERSION}/PlacesListBrowser.qml
     controls.${QT_MAJOR_VERSION}/TagsDialog.qml

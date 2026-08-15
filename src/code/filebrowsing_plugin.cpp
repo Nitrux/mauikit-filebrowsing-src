@@ -13,6 +13,7 @@
 #include "thumbnailer.h"
 
 #include "fmstatic.h"
+#include "fileoperation.h"
 
 #include "tagslist.h"
 #include "tagging.h"
@@ -55,6 +56,14 @@ void FileBrowsingPlugin::registerTypes(const char *uri)
         Q_UNUSED(scriptEngine)
         return new FMStatic;
     });
+
+    qmlRegisterSingletonType<FileOperation>(uri, 1, 0, "FileOperation", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        return FileOperation::instance();
+    });
+
+    qmlRegisterType(componentUrl(QStringLiteral("FileOperationDialog.qml")), uri, 1, 0, "FileOperationDialog");
     
     //File Tagging components
     qmlRegisterSingletonType<Tagging>(uri, 1, 3, "Tagging", &Tagging::qmlInstance);

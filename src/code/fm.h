@@ -265,6 +265,8 @@ public Q_SLOTS:
      * @param where the new location to copy the files
      */
     bool copy(const QList<QUrl> &urls, const QUrl &where);
+
+    bool paste(const QList<QUrl> &urls, const QUrl &where, bool cut);
     
     /**
      * @brief Cut a set of file URLs to a new destination
