@@ -536,6 +536,8 @@ public Q_SLOTS:
      */
     static bool copy(const QList<QUrl> &urls, const QUrl &destinationDir);
 
+    static bool paste(const QList<QUrl> &urls, const QUrl &destinationDir, bool cut);
+
     /**
      * @brief Perform a move/cut of a list of files to a destination. This function also moves the associated tags.
      * @param urls list of URLs to be moved
