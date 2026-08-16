@@ -372,7 +372,7 @@ Maui.AltBrowser
             {
                 const urls = _dropMenu.urls.split(",")
                 for(var i in urls)
-                    FB.FM.createSymlink(url[i], _dropMenu.target)
+                    FB.FM.createSymlink(urls[i], _dropMenu.target)
             }
         }
 

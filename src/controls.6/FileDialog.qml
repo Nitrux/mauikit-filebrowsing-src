@@ -238,24 +238,6 @@ Maui.PopupPage
         }
     ]
     
-    page.footerColumn: [
-        
-        Maui.ToolBar
-        {
-            visible: control.mode === FileDialog.Modes.Save
-            Layout.fillWidth: true
-            position: ToolBar.Footer
-            
-            middleContent: TextField
-            {
-                id: _textField
-                Layout.fillWidth: true
-                placeholderText: i18nd("mauikitfilebrowsing", "File name...")
-                text: suggestedFileName
-            }
-        }
-    ]
-    
     Maui.InfoDialog
     {
         id: _confirmationDialog
