@@ -13,9 +13,39 @@ Maui.PopupPage
     property string operationName: ""
     property string destinationName: ""
     property string errorMessage: ""
+    property Item anchorItem: null
+    property int anchorMargin: Maui.Style.space.medium
+
+    function positionNextToAnchor()
+    {
+        if (!anchorItem || !control.parent)
+            return
+
+        const anchorPosition = anchorItem.mapToItem(control.parent, 0, 0)
+        control.x = Math.max(anchorMargin, Math.min(control.parent.width - control.width - anchorMargin, anchorPosition.x + anchorItem.width - control.width))
+        control.y = Math.max(anchorMargin, anchorPosition.y - control.height - anchorMargin)
+    }
+
+    anchors.centerIn: undefined
+
+    onOpened: Qt.callLater(positionNextToAnchor)
+    onWidthChanged: if (visible) positionNextToAnchor()
+    onHeightChanged: if (visible) positionNextToAnchor()
+
+    Connections
+    {
+        target: control.anchorItem
+
+        function onXChanged() { if (control.visible) control.positionNextToAnchor() }
+        function onYChanged() { if (control.visible) control.positionNextToAnchor() }
+        function onWidthChanged() { if (control.visible) control.positionNextToAnchor() }
+        function onHeightChanged() { if (control.visible) control.positionNextToAnchor() }
+    }
 
     widthHint: 0.9
     maxWidth: 400
+    // File operations run asynchronously; keep the rest of the window usable.
+    modal: false
     persistent: true
     headBar.visible: false
     title: i18nd("mauikitfilebrowsing", "File operation")

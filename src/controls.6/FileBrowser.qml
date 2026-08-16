@@ -1047,7 +1047,14 @@ Maui.Page
     function paste()
     {
         console.log("FILEBROWSER.PASTE", control.currentPath, control.currentFMList, control.readOnly)
+
+        if (control.readOnly || !control.currentFMList || !control.currentFMList.clipboardHasContent)
+            return
+
         control.currentFMList.paste()
+
+        if (control.selectionBar)
+            control.selectionBar.clear()
     }
 
     /**
