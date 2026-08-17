@@ -187,7 +187,6 @@ Maui.ListBrowser
                 isCurrentItem: control.currentPath === model.path
                 iconSource: model.icon +  (Qt.platform.os == "android" || Qt.platform.os == "osx" ? ("-sidebar") : "")
                 iconSizeHint: Maui.Style.iconSize
-                template.isMask: true
                 label1.text: model.label
                 labelsVisible: false
                 tooltipText: model.label

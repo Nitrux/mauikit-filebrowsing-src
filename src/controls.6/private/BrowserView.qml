@@ -484,8 +484,6 @@ Maui.AltBrowser
         label2.text: control.objectName === "searchView" ? model.path : ""
         label3.text : model.mime ? (model.mime === "inode/directory" ? (model.count ? model.count + i18nd("mauikitfilebrowsing", " items") : "") : Maui.Handy.formatSize(model.size)) : ""
         label4.text: model.modified ? Maui.Handy.formatDate(model.modified, "MM/dd/yyyy") : ""
-
-        template.isMask: iconSizeHint <= 22
         iconSizeHint: _private.listIconSize
 
         tooltipText: model.path
@@ -525,7 +523,6 @@ Maui.AltBrowser
                 height: Maui.Style.iconSizes.small
                 width: Maui.Style.iconSizes.small
                 anchors.centerIn: parent
-                isMask: true
                 color: label1.color
             }
         }
@@ -707,7 +704,6 @@ Maui.AltBrowser
 
                 source: "link"
                 color: Maui.Theme.textColor
-                isMask: true
                 height: Maui.Style.iconSizes.small
             }
 
