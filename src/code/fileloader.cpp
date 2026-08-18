@@ -2,7 +2,6 @@
 #include "fmstatic.h"
 #include "tagging.h"
 
-#include <QDebug>
 #include <QDirIterator>
 
 using namespace FMH;
@@ -29,7 +28,8 @@ FileLoader::FileLoader(QObject *parent) : QObject(nullptr)
 FileLoader::~FileLoader()
 {
     m_thread->quit();
-    m_thread->wait();
+    if (QThread::currentThread() != m_thread)
+        m_thread->wait();
 }
 
 void FileLoader::setBatchCount(const uint &count)
@@ -44,13 +44,11 @@ uint FileLoader::batchCount() const
 
 void FileLoader::requestPath(const QList<QUrl> &urls, const bool &recursive, const QStringList &nameFilters, const QDir::Filters &filters, const uint &limit)
 {
-    qDebug() << "FROM file loader" << urls;
     Q_EMIT this->start(urls, recursive, nameFilters, filters, limit);
 }
 
 void FileLoader::getFiles(QList<QUrl> paths, bool recursive, const QStringList &nameFilters, const QDir::Filters &filters, uint limit)
 {
-    qDebug() << "GETTING FILES";
     uint count = 0; // total count
     uint i = 0; // count per batch
     uint batch = 0; // batches count

@@ -44,7 +44,6 @@ Tagging::Tagging() : QObject()
     this->setApp();
     connect(qApp, &QCoreApplication::aboutToQuit, [this]()
     {
-        qDebug() << "Lets remove Tagging singleton instance and all opened Tagging DB connections.";
         
         qDeleteAll(m_dbs);
         m_dbs.clear();
@@ -55,12 +54,9 @@ TAGDB * Tagging::db()
 {
     if(m_dbs.contains(QThread::currentThread()))
     {
-        qDebug() << "Using existing TAGGINGDB instance";
         
         return m_dbs[QThread::currentThread()];
     }
-    
-    qDebug() << "Creating new TAGGINGDB instance";
     
     auto new_db = new TAGDB;
     m_dbs.insert(QThread::currentThread(), new_db);
@@ -102,7 +98,6 @@ const QVariantList Tagging::get(const QString &queryTxt, std::function<bool(QVar
 
     } else
     {
-        qDebug() << query.lastError() << query.lastQuery();
     }
 
     return mapList;
@@ -178,7 +173,6 @@ bool Tagging::tagUrl(const QString &url, const QString &tag, const QString &colo
 
     if(this->db()->insert(TAG::TABLEMAP[TAG::TABLE::TAGS_URLS], tag_url_map))
     {
-        qDebug() << "tagging url" << url <<tag;
         Q_EMIT this->urlTagged(url, myTag);
         
         //         auto fileMetaData = KFileMetaData::UserMetaData(QUrl::fromUserInput(url).toLocalFile());
@@ -256,7 +250,6 @@ bool Tagging::removeUrlTags(const QString &url, const bool &strict) // same as r
 
 bool Tagging::removeUrlTag(const QString &url, const QString &tag)
 {
-    qDebug() << "Remove url tag" << url << tag;
     FMH::MODEL data {{FMH::MODEL_KEY::URL, url}, {FMH::MODEL_KEY::TAG, tag}};
     if(this->db()->remove(TAG::TABLEMAP[TAG::TABLE::TAGS_URLS], data))
     {
@@ -279,7 +272,6 @@ bool Tagging::removeUrl(const QString &url)
 
 bool Tagging::app()
 {
-    qDebug() << "REGISTER APP" << this->appName << this->appOrg << this->appComment;
     const QVariantMap app_map {
         {FMH::MODEL_NAME[FMH::MODEL_KEY::NAME], this->appName},
         {FMH::MODEL_NAME[FMH::MODEL_KEY::ORG], this->appOrg},
@@ -335,9 +327,7 @@ static bool doNameFilter(const QString &name, const QStringList &filters)
 });
     
     for (const auto &filter : filtersAccumulate) {
-        qDebug() << "trying to match" << name << filter;
         if (filter.match(name).hasMatch()) {
-            qDebug() << "trying to match" << true;
 
             return true;
         }

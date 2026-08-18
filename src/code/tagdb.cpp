@@ -37,7 +37,6 @@ TAGDB::TAGDB() : QObject(nullptr)
     this->name = QUuid::createUuid().toString();
     if (!FMH::fileExists(QUrl::fromLocalFile(TAG::TaggingPath + TAG::DBName))) {
         this->openDB(this->name);
-        qDebug() << "Collection doesn't exists, trying to create it" << TAG::TaggingPath + TAG::DBName;
         this->prepareCollectionDB();
     } else
         this->openDB(this->name);
@@ -45,7 +44,6 @@ TAGDB::TAGDB() : QObject(nullptr)
 
 TAGDB::~TAGDB()
 {
-    qDebug() << "CLOSING THE TAGGING DATA BASE";
     this->m_db.close();
 }
 
@@ -56,10 +54,9 @@ void TAGDB::openDB(const QString &name)
         this->m_db.setDatabaseName(TAG::TaggingPath + TAG::DBName);
     }
 
-    if (!this->m_db.isOpen()) {
-        if (!this->m_db.open())
-            qDebug() << "ERROR OPENING DB" << this->m_db.lastError().text() << m_db.connectionName();
-    }
+    if (!this->m_db.isOpen() && !this->m_db.open())
+        return;
+
     auto query = this->getQuery(QStringLiteral("PRAGMA synchronous=OFF"));
     query.exec();
 }
@@ -73,12 +70,10 @@ void TAGDB::prepareCollectionDB() const
     if (!file.exists()) {
         QString log = QStringLiteral("Fatal error on build database. The file '");
         log.append(file.fileName() + QStringLiteral("' for database and tables creation query cannot be not found!"));
-        qDebug() << log;
         return;
     }
 
     if (!file.open(QIODevice::ReadOnly)) {
-        qDebug() << QStringLiteral("Fatal error on try to create database! The file with sql queries for database creation cannot be opened!");
         return;
     }
 
@@ -107,12 +102,9 @@ void TAGDB::prepareCollectionDB() const
                 hasText = true;
         }
         if (!line.isEmpty()) {
-            if (!query.exec(line)) {
-                qDebug() << "exec failed" << query.lastQuery() << query.lastError();
-            }
+            query.exec(line);
 
-        } else
-            qDebug() << "exec wrong" << query.lastError();
+        }
     }
     file.close();
 }
@@ -127,11 +119,8 @@ bool TAGDB::checkExistance(const QString &queryStr) const
 {
     auto query = this->getQuery(queryStr);
 
-    if (query.exec()) {
-        if (query.next())
-            return true;
-    } else
-        qDebug() << query.lastError().text();
+    if (query.exec() && query.next())
+        return true;
 
     return false;
 }
@@ -151,11 +140,9 @@ QSqlQuery TAGDB::getQuery() const
 bool TAGDB::insert(const QString &tableName, const QVariantMap &insertData) const
 {
     if (tableName.isEmpty()) {
-        qDebug() << QStringLiteral("Fatal error on insert! The table name is empty!");
         return false;
 
     } else if (insertData.isEmpty()) {
-        qDebug() << QStringLiteral("Fatal error on insert! The insertData is empty!");
         return false;
     }
 
@@ -181,10 +168,8 @@ bool TAGDB::insert(const QString &tableName, const QVariantMap &insertData) cons
 bool TAGDB::update(const QString &tableName, const FMH::MODEL &updateData, const QVariantMap &where) const
 {
     if (tableName.isEmpty()) {
-        qDebug() << QStringLiteral("Fatal error on insert! The table name is empty!");
         return false;
     } else if (updateData.isEmpty()) {
-        qDebug() << QStringLiteral("Fatal error on insert! The insertData is empty!");
         return false;
     }
 
@@ -204,7 +189,6 @@ bool TAGDB::update(const QString &tableName, const FMH::MODEL &updateData, const
 
     QString sqlQueryString = QStringLiteral("UPDATE ") + tableName + QStringLiteral(" SET ") + QString(set.join(QStringLiteral(","))) + QStringLiteral(" WHERE ") + QString(condition.join(QStringLiteral(",")));
     auto query = this->getQuery(sqlQueryString);
-    qDebug() << sqlQueryString;
     return query.exec();
 }
 
@@ -218,11 +202,9 @@ bool TAGDB::update(const QString &table, const QString &column, const QVariant &
 bool TAGDB::remove(const QString &tableName, const FMH::MODEL &removeData) const
 {
     if (tableName.isEmpty()) {
-        qDebug() << QStringLiteral("Fatal error on removing! The table name is empty!");
         return false;
 
     } else if (removeData.isEmpty()) {
-        qDebug() << QStringLiteral("Fatal error on insert! The removeData is empty!");
         return false;
     }
 
@@ -240,7 +222,6 @@ bool TAGDB::remove(const QString &tableName, const FMH::MODEL &removeData) const
     }
 
     QString sqlQueryString = QStringLiteral("DELETE FROM ") + tableName + QStringLiteral(" WHERE ") + strValues;
-    qDebug() << sqlQueryString;
 
     return this->getQuery(sqlQueryString).exec();
 }

@@ -43,7 +43,6 @@ TagsList::TagsList(QObject *parent)
 
     connect(m_tagging, &Tagging::urlTagged, [this](QString url, QString)
             {
-                qDebug() << "Tagging url tagged" << url << m_urls.isDetached() << this;
 
                 if(this->m_urls.contains(url))
                     this->refresh();
@@ -61,7 +60,6 @@ TagsList::TagsList(QObject *parent)
 
 TagsList::~TagsList()
 {
-    qDebug() << "Deleting single tagging instance" << this;
     m_tagging->disconnect();
     m_tagging = nullptr;
 }

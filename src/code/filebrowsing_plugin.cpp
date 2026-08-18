@@ -29,7 +29,6 @@ QUrl FileBrowsingPlugin::componentUrl(const QString &fileName) const
 
 void FileBrowsingPlugin::registerTypes(const char *uri)
 {
-    qDebug() << "REGISTER MAUIKITFILEBROWSING TYPES <<<<<<<<<<<<<<<<<<<<<<";
 
 #if defined(Q_OS_ANDROID)
     QResource::registerResource(QStringLiteral("assets:/android_rcc_bundle.rcc"));
