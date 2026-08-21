@@ -59,7 +59,7 @@ Maui.AltBrowser
 
     onPathChanged:
     {
-        control.currentIndex = 0
+        control.setCurrentIndex(0)
         control.currentView.forceActiveFocus()
     }
 
@@ -541,6 +541,9 @@ Maui.AltBrowser
 
         onClicked: function(mouse)
         {
+            const anchorIndex = control.currentIndex
+            control.setCurrentIndex(index)
+
             if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ControlModifier))
             {
                 control.itemsSelected([index])
@@ -552,19 +555,17 @@ Maui.AltBrowser
                 // {
                 //     return
                 // }
-                control.itemsSelected(control.range(control.currentIndex, index))
+                control.itemsSelected(control.range(anchorIndex, index))
 
             } else
             {
                 control.itemClicked(index)
             }
-
-            control.currentIndex = index
         }
 
         onDoubleClicked:
         {
-            control.currentIndex = index
+            control.setCurrentIndex(index)
             control.itemDoubleClicked(index)
         }
 
@@ -573,19 +574,19 @@ Maui.AltBrowser
             if(!Maui.Handy.isTouch)
                 return
 
-            control.currentIndex = index
+            control.setCurrentIndex(index)
             control.itemRightClicked(index)
         }
 
         onRightClicked:
         {
-            control.currentIndex = index
+            control.setCurrentIndex(index)
             control.itemRightClicked(index)
         }
 
         onToggled: function(state)
         {
-            control.currentIndex = index
+            control.setCurrentIndex(index)
             control.itemToggled(index, state)
         }
 
@@ -719,6 +720,9 @@ Maui.AltBrowser
 
             onClicked: function(mouse)
             {
+                const anchorIndex = control.currentIndex
+                control.setCurrentIndex(index)
+
                 if ((mouse.button == Qt.LeftButton) && (mouse.modifiers & Qt.ControlModifier))
                 {
                     control.itemsSelected([index])
@@ -731,17 +735,16 @@ Maui.AltBrowser
                     //     return
                     // }
                     // control.itemsSelected(control.range(lastSelectedIndex, index))
-                    control.itemsSelected(control.range(control.currentIndex, index))
+                    control.itemsSelected(control.range(anchorIndex, index))
                 } else
                 {
                     control.itemClicked(index)
                 }
-                control.currentIndex = index
             }
 
             onDoubleClicked:
             {
-                control.currentIndex = index
+                control.setCurrentIndex(index)
                 control.itemDoubleClicked(index)
             }
 
@@ -750,19 +753,19 @@ Maui.AltBrowser
                 if(!Maui.Handy.isTouch)
                     return
 
-                control.currentIndex = index
+                control.setCurrentIndex(index)
                 control.itemRightClicked(index)
             }
 
             onRightClicked:
             {
-                control.currentIndex = index
+                control.setCurrentIndex(index)
                 control.itemRightClicked(index)
             }
 
             onToggled: function(state)
             {
-                control.currentIndex = index
+                control.setCurrentIndex(index)
 
                 control.itemToggled(index, state)
             }
@@ -870,7 +873,16 @@ Maui.AltBrowser
     }
 
     /**
-     * @brief Forces to focus the current browsing view first element.
+     * @brief Sets the index on the active visual browser view.
+     */
+    function setCurrentIndex(index)
+    {
+        if (control.currentView)
+            control.currentView.currentIndex = index
+    }
+
+    /**
+     *  Forces focus to the current browsing view.
      */
     function forceActiveFocus()
     {

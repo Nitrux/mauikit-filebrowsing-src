@@ -449,7 +449,11 @@ Maui.Page
 
         Maui.InfoDialog
         {
-            onClosed: destroy()
+            onClosed:
+            {
+                control.restoreBrowserFocus()
+                destroy()
+            }
             title: i18n("Quit")
             message: i18n("Are you sure you want to quit the current search in progress?")
             onAccepted:
@@ -474,7 +478,11 @@ Maui.Page
 
             title:  i18nd("mauikitfilebrowsing", "Removing %1 files", urls.length)
             message: i18nd("mauikitfilebrowsing", "Delete %1  \nTotal freed space %2", (Maui.Handy.isLinux ? "or move to trash?" : "? This action can not be undone."),  Maui.Handy.formatSize(freedSpace))
-            onClosed: destroy()
+            onClosed:
+            {
+                control.restoreBrowserFocus()
+                destroy()
+            }
             actions: [
                 Action
                 {
@@ -525,7 +533,11 @@ Maui.Page
         Maui.InputDialog
         {
             id: _newDialog
-            onClosed: destroy()
+            onClosed:
+            {
+                control.restoreBrowserFocus()
+                destroy()
+            }
             // title: _newDirOp.checked ? i18nd("mauikitfilebrowsing", "New folder") : i18nd("mauikitfilebrowsing", "New file")
             message: i18nd("mauikitfilebrowsing", "Create a new folder or a file with a custom name.")
 
@@ -583,7 +595,11 @@ Maui.Page
             id: _renameDialog
 
             property var item : ({})
-            onClosed: destroy()
+            onClosed:
+            {
+                control.restoreBrowserFocus()
+                destroy()
+            }
             // title: i18nd("mauikitfilebrowsing", "Rename")
             message: i18nd("mauikitfilebrowsing", "Enter the new name for the file.")
 
@@ -617,7 +633,14 @@ Maui.Page
     Component
     {
         id: _newTagDialogComponent
-        FB.NewTagDialog {onClosed: destroy()}
+        FB.NewTagDialog
+        {
+            onClosed:
+            {
+                control.restoreBrowserFocus()
+                destroy()
+            }
+        }
     }
 
     /**
@@ -647,7 +670,7 @@ Maui.Page
             if(index > -1)
             {
                 console.log("FOUDN TRYPIGN IDNEX", index)
-                control.currentIndex = control.currentFMModel.mappedFromSource(index)
+                control.setCurrentIndex(control.currentFMModel.mappedFromSource(index))
             }
 
             typingQuery = ""
@@ -786,28 +809,28 @@ Maui.Page
         {
             if(indexes.length)
             {
-                control.currentIndex = indexes[0]
+                control.setCurrentIndex(indexes[0])
                 control.selectIndexes(indexes)
             }
         }
 
         function onItemClicked(index)
         {
-            control.currentIndex = index
+            control.setCurrentIndex(index)
             control.itemClicked(index)
             control.currentView.forceActiveFocus()
         }
 
         function onItemDoubleClicked(index)
         {
-            control.currentIndex = index
+            control.setCurrentIndex(index)
             control.itemDoubleClicked(index)
             control.currentView.forceActiveFocus()
         }
 
         function onItemRightClicked(index)
         {
-            control.currentIndex = index
+            control.setCurrentIndex(index)
             control.itemRightClicked(index)
             control.currentView.forceActiveFocus()
         }
@@ -1396,7 +1419,24 @@ Maui.Page
     }
 
     /**
-     * @brief Forces to focus the current view.
+     *  Sets the index on the active visual browser view.
+     */
+    function setCurrentIndex(index)
+    {
+        if (control.currentView)
+            control.currentView.setCurrentIndex(index)
+    }
+
+    /**
+     *  Restores focus to the current view after a popup has closed.
+     */
+    function restoreBrowserFocus()
+    {
+        Qt.callLater(() => control.forceActiveFocus())
+    }
+
+    /**
+     *  Forces focus to the current view.
      */
     function forceActiveFocus()
     {

@@ -43,7 +43,6 @@ void FMH::Downloader::setConnections()
 
 FMH::Downloader::~Downloader()
 {
-    qDebug() << "DELETEING DOWNLOADER";
     this->array->clear();
 }
 
@@ -166,7 +165,6 @@ void FMH::Downloader::onDownloadProgress(qint64 bytesRead, qint64 bytesTotal)
         return;
     }
     
-    qDebug() << "DOWNLOAD PROGRESS" << ((bytesRead * 100) / bytesTotal);
     Q_EMIT this->progress((bytesRead * 100) / bytesTotal);
 }
 
