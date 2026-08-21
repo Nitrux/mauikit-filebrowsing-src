@@ -20,6 +20,9 @@
 
 #include <QObject>
 #include <QImage>
+#include <QAtomicInt>
+#include <QSharedPointer>
+#include <QFutureWatcher>
 #include <QQmlEngine>
 
 #include <MauiKit4/Core/mauilist.h>
@@ -428,9 +431,13 @@ public:
     void setMergeFilters(bool value);
     bool mergeFilters() const;
 
+    Q_INVOKABLE void cancelSearch();
+
 private:
     FM *fm;
     Tagging *m_tagging;
+    QSharedPointer<QAtomicInt> m_searchCancel;
+    QFutureWatcher<FMStatic::PATH_CONTENT> *m_searchWatcher = nullptr;
 
     void clear();
     void reset();

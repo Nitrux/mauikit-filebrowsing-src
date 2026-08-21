@@ -230,6 +230,7 @@ FMList::FMList(QObject *parent)
 
 FMList::~FMList()
 {
+    this->cancelSearch();
     m_tagging->disconnect();
     m_tagging = nullptr;
 }
@@ -907,8 +908,20 @@ void FMList::componentComplete()
     }
 }
 
+void FMList::cancelSearch()
+{
+    if (this->m_searchCancel)
+        this->m_searchCancel->storeRelaxed(1);
+
+    if (this->m_searchWatcher && this->m_searchWatcher->future().isRunning())
+        this->m_searchWatcher->future().waitForFinished();
+}
+
 void FMList::search(const QString &query, bool recursive)
 {
+    this->cancelSearch();
+    const auto cancelToken = QSharedPointer<QAtomicInt>::create(0);
+    this->m_searchCancel = cancelToken;
     if(this->path.isEmpty())
     {
         this->setStatus({PathStatus::ERROR, i18n("Error"), i18n("No path to perform the search"), QStringLiteral("document-info"), true, false});
@@ -921,18 +934,24 @@ void FMList::search(const QString &query, bool recursive)
         return;
     }
 
-    QFutureWatcher<FMStatic::PATH_CONTENT> *watcher = new QFutureWatcher<FMStatic::PATH_CONTENT>;
+    QFutureWatcher<FMStatic::PATH_CONTENT> *watcher = new QFutureWatcher<FMStatic::PATH_CONTENT>(this);
+    this->m_searchWatcher = watcher;
     connect(watcher, &QFutureWatcher<FMH::MODEL_LIST>::finished, [=]() {
         const auto res = watcher->future().result();
 
-        this->assignList(res.content);
+        if (!cancelToken->loadRelaxed())
+            this->assignList(res.content);
+        if (this->m_searchCancel == cancelToken)
+            this->m_searchCancel.clear();
+        if (this->m_searchWatcher == watcher)
+            this->m_searchWatcher = nullptr;
         watcher->deleteLater();
     });
 
     QFuture<FMStatic::PATH_CONTENT> t1 = QtConcurrent::run([=]() -> FMStatic::PATH_CONTENT {
         FMStatic::PATH_CONTENT res;
         res.path = path;
-        res.content = FMStatic::search(query, this->path, this->hidden, this->onlyDirs, this->filters);
+        res.content = FMStatic::search(query, this->path, this->hidden, this->onlyDirs, this->filters, [cancelToken]() { return cancelToken->loadRelaxed(); });
         return res;
     });
     watcher->setFuture(t1);

@@ -15,6 +15,7 @@
 #include <QMimeType>
 #include <QStandardPaths>
 #include <QUrl>
+#include <functional>
 #include <QQmlEngine>
 
 #ifdef KIO_AVAILABLE
@@ -497,7 +498,7 @@ public Q_SLOTS:
      * @param filters list of filter patterns such as `{"*.qml"}`, it can use regular expressions.
      * @return the search results are returned as a FMH::MODEL_LIST
      */
-    static FMH::MODEL_LIST search(const QString &query, const QUrl &path, const bool &hidden = false, const bool &onlyDirs = false, const QStringList &filters = QStringList());
+    static FMH::MODEL_LIST search(const QString &query, const QUrl &path, const bool &hidden = false, const bool &onlyDirs = false, const QStringList &filters = QStringList(), const std::function<bool()> &isCanceled = {});
 
     /**
      * @brief Devices mounted in the file system

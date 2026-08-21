@@ -279,7 +279,7 @@ Maui.AltBrowser
     holder.emoji: searchLoadingPlaceholder ? "edit-find" : _holder.emoji
     holder.title: searchLoadingPlaceholder ? i18nd("mauikitfilebrowsing", "Searching files…") : _holder.title
     holder.body: searchLoadingPlaceholder
-        ? i18nd("mauikitfilebrowsing", "Index is scanning this location for matches. Results will appear here as they are found.")
+        ? i18nd("mauikitfilebrowsing", "Scanning this location for matches. Results will appear here as they are found.")
         : _holder.body
 
     Maui.ContextualMenu
@@ -466,6 +466,22 @@ Maui.AltBrowser
     {
         id: delegate
         readonly property string path : model.path
+
+        function pathForDisplay(path)
+        {
+            const value = String(path || "")
+            if (!value.startsWith("file:///"))
+                return value
+
+            try
+            {
+                return decodeURIComponent(value.substring(7))
+            }
+            catch (error)
+            {
+                return value.substring(7)
+            }
+        }
         readonly property string resolvedIconSource: (() =>
                                                      {
                                                          const icon = String(model.icon || "")
@@ -481,12 +497,12 @@ Maui.AltBrowser
         iconSource: resolvedIconSource
 
         label1.text: model.label ? model.label : ""
-        label2.text: control.objectName === "searchView" ? model.path : ""
+        label2.text: control.objectName === "searchView" ? delegate.pathForDisplay(model.path) : ""
         label3.text : model.mime ? (model.mime === "inode/directory" ? (model.count ? model.count + i18nd("mauikitfilebrowsing", " items") : "") : Maui.Handy.formatSize(model.size)) : ""
         label4.text: model.modified ? Maui.Handy.formatDate(model.modified, "MM/dd/yyyy") : ""
         iconSizeHint: _private.listIconSize
 
-        tooltipText: model.path
+        tooltipText: control.objectName === "searchView" ? delegate.pathForDisplay(model.path) : model.path
 
         checkable: control.selectionMode || checked
         readonly property string rawImageSource: height > 32 ? control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size) : ""

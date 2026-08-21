@@ -601,6 +601,7 @@ Maui.PopupPage
     
     onClosed:
     {
+        _browser.cancelSearch()
         _selectionBar.clear()
     }
     

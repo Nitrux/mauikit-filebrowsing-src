@@ -454,15 +454,19 @@ Maui.Page
                 control.restoreBrowserFocus()
                 destroy()
             }
-            title: i18n("Quit")
-            message: i18n("Are you sure you want to quit the current search in progress?")
+            title: i18n("Cancel search")
+            message: i18n("A file search is still in progress. Do you want to cancel it?")
+            Component.onCompleted: standardButton(Dialog.Close).text = i18n("Cancel search")
             onAccepted:
             {
-                _stackView.pop()
-                _browser.forceActiveFocus()
+                control.cancelSearch()
             }
 
-            onRejected: close()
+            onRejected:
+            {
+                control.cancelSearch()
+                close()
+            }
         }
     }
 
@@ -1311,6 +1315,18 @@ Maui.Page
     /**
      * @brief Forces to close the search view, and return to the browsing view.
      **/
+    function cancelSearch()
+    {
+        control.currentFMList.cancelSearch()
+        control.currentFMModel.clearFilters()
+        _searchField.clear()
+        _filterButton.checked = false
+        control.settings.searchBarVisible = false
+        if (control.isSearchView)
+            _stackView.pop()
+        _browser.forceActiveFocus()
+    }
+
     function quitSearch()
     {
         if(control.currentView.loading)

@@ -78,7 +78,7 @@ FMH::MODEL_LIST FMStatic::getDefaultPaths()
     return FMStatic::packItems(FMStatic::defaultPaths, PathTypeLabel(FMStatic::PATHTYPE_KEY::PLACES_PATH));
 }
 
-FMH::MODEL_LIST FMStatic::search(const QString &query, const QUrl &path, const bool &hidden, const bool &onlyDirs, const QStringList &filters)
+FMH::MODEL_LIST FMStatic::search(const QString &query, const QUrl &path, const bool &hidden, const bool &onlyDirs, const QStringList &filters, const std::function<bool()> &isCanceled)
 {
     FMH::MODEL_LIST content;
 
@@ -97,6 +97,9 @@ FMH::MODEL_LIST FMStatic::search(const QString &query, const QUrl &path, const b
 
         QDirIterator it(path.toLocalFile(), filters, dirFilter, QDirIterator::Subdirectories);
         while (it.hasNext()) {
+            if (isCanceled && isCanceled())
+                break;
+
             auto url = it.next();
             if (it.fileName().contains(query, Qt::CaseInsensitive)) {
                 content << FMStatic::getFileInfoModel(QUrl::fromLocalFile(url));
