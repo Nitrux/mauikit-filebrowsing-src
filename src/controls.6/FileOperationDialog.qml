@@ -5,6 +5,14 @@ import QtQuick.Layouts
 import org.mauikit.controls as Maui
 import org.mauikit.filebrowsing as FB
 
+/**
+ *  org.mauikit.controls.PopupPage
+ *  Displays progress and errors for the global FileOperation job.
+ *
+ * The dialog opens when a job starts, follows an optional anchorItem, and stays
+ * non-modal so the rest of the window remains usable. Successful jobs close it
+ * automatically; failures leave the error message visible.
+ */
 Maui.PopupPage
 {
     id: control

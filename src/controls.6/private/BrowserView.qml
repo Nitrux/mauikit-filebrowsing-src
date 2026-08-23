@@ -287,6 +287,9 @@ Maui.AltBrowser
         id: _dropMenu
         property string urls
         property url target
+        readonly property bool targetIsDirectory: FB.FM.isDir(target)
+        readonly property bool canMerge: !targetIsDirectory && !control.readOnly
+        readonly property bool canTransfer: targetIsDirectory && !control.readOnly
 
         MenuItem
         {
@@ -299,20 +302,33 @@ Maui.AltBrowser
                     id: _mergeDialog
                     property var urls
 
-                    readonly property bool dirExists : FB.FM.fileExists(control.path+"/"+textEntry.text)
+                    readonly property string directoryName: textEntry.text.trim()
+                    readonly property bool hasName: directoryName.length > 0
+                    readonly property bool dirExists: hasName && FB.FM.fileExists(control.path + "/" + directoryName)
+                    readonly property bool hasValidName: hasName && !dirExists
 
-                    onDirExistsChanged:
+                    function updateValidation()
                     {
-                        console.log("DIR EXISTS?", dirExists)
+                        const acceptButton = standardButton(Dialog.Ok)
+                        if (acceptButton)
+                            acceptButton.enabled = hasValidName
 
-                        if(dirExists)
+                        if (!hasName)
                         {
-                            _mergeDialog.alert(i18nd("mauikitfilebrowsing", "Directory already exists."), 2)
-                        }else
+                            alert("", 0)
+                        }
+                        else if (dirExists)
                         {
-                            _mergeDialog.alert(i18nd("mauikitfilebrowsing", "Looks good."), 0)
+                            alert(i18nd("mauikitfilebrowsing", "Directory already exists."), 2)
+                        }
+                        else
+                        {
+                            alert(i18nd("mauikitfilebrowsing", "Looks good."), 0)
                         }
                     }
+
+                    onDirectoryNameChanged: updateValidation()
+                    onOpened: updateValidation()
 
                     title: i18nd("mauikitfilebrowsing", "Merge %1 files", urls.length)
                     message:i18nd("mauikitfilebrowsing", "Give a name to the new directory where all files will be merge.")
@@ -321,12 +337,13 @@ Maui.AltBrowser
 
                     onFinished:
                     {
-                        FB.FM.group(_mergeDialog.urls, control.path, text)
+                        FB.FM.group(_mergeDialog.urls, control.path, directoryName)
                     }
                 }
             }
 
-            enabled: !FB.FM.isDir(_dropMenu.target) && !control.readOnly
+            visible: _dropMenu.canMerge
+            height: visible ? implicitHeight : -_dropMenu.spacing
             text: i18nd("mauikitfilebrowsing", "Merge Here")
             icon.name: "edit-group"
             onTriggered:
@@ -341,7 +358,8 @@ Maui.AltBrowser
 
         MenuItem
         {
-            enabled: FB.FM.isDir(_dropMenu.target) && !control.readOnly
+            visible: _dropMenu.canTransfer
+            height: visible ? implicitHeight : -_dropMenu.spacing
             text: i18nd("mauikitfilebrowsing", "Copy Here")
             icon.name: "edit-copy"
             onTriggered:
@@ -353,7 +371,8 @@ Maui.AltBrowser
 
         MenuItem
         {
-            enabled: FB.FM.isDir(_dropMenu.target) && !control.readOnly
+            visible: _dropMenu.canTransfer
+            height: visible ? implicitHeight : -_dropMenu.spacing
             text: i18nd("mauikitfilebrowsing", "Move Here")
             icon.name: "edit-move"
             onTriggered:
@@ -365,7 +384,8 @@ Maui.AltBrowser
 
         MenuItem
         {
-            enabled: FB.FM.isDir(_dropMenu.target) && !control.readOnly
+            visible: _dropMenu.canTransfer
+            height: visible ? implicitHeight : -_dropMenu.spacing
             text: i18nd("mauikitfilebrowsing", "Link Here")
             icon.name: "edit-link"
             onTriggered:
@@ -376,14 +396,6 @@ Maui.AltBrowser
             }
         }
 
-        MenuSeparator {}
-
-        MenuItem
-        {
-            text: i18nd("mauikitfilebrowsing", "Cancel")
-            icon.name: "dialog-cancel"
-            onTriggered: _dropMenu.close()
-        }
     }
 
     listView.section.delegate: Maui.LabelDelegate
@@ -684,7 +696,6 @@ Maui.AltBrowser
             template.maskRadius: 0
             iconSource: resolvedIconSource
             label1.text: model.label
-            label2.visible: delegate.height > 160 && model.mime
             label2.font.pointSize: Maui.Style.fontSizes.tiny
             label2.text: model.mime ? (model.mime === "inode/directory" ? (model.count ? model.count + i18nd("mauikitfilebrowsing", " items") : "") : Maui.Handy.formatSize(model.size)) : ""
 

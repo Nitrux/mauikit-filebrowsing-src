@@ -12,7 +12,7 @@
 class WebDAVClient;
 class WebDAVReply;
 /**
- * @brief The Syncing class
+ *  Performs WebDAV listing, transfer, and directory operations.
  */
 class FILEBROWSING_EXPORT Syncing : public QObject
 {
@@ -23,18 +23,18 @@ public:
     enum SIGNAL_TYPE : uint_fast8_t { OPEN, DOWNLOAD, COPY, SAVE, CUT, DELETE, RENAME, MOVE, UPLOAD };
 
     /**
-     *  @brief uploadQueue
+     *   Local files waiting to be uploaded.
      */
     QStringList uploadQueue;
 
     /**
-     * @brief Syncing
+     *  Creates a WebDAV synchronization helper.
      * @param parent
      */
     explicit Syncing(QObject *parent = nullptr);
 
     /**
-     * @brief listContent
+     *  Lists remote entries below a WebDAV path.
      * @param path
      * @param filters
      * @param depth
@@ -42,7 +42,7 @@ public:
     void listContent(const QUrl &path, const QStringList &filters, const int &depth = 1);
 
     /**
-     * @brief setCredentials
+     *  Sets the WebDAV endpoint and login credentials.
      * @param server
      * @param user
      * @param password
@@ -50,58 +50,58 @@ public:
     void setCredentials(const QString &server, const QString &user, const QString &password);
 
     /**
-     * @brief download
+     *  Downloads a remote file into the configured destination.
      * @param path
      */
     void download(const QUrl &path);
 
     /**
-     * @brief upload
+     *  Uploads a local file to a remote path.
      * @param path
      * @param filePath
      */
     void upload(const QUrl &path, const QUrl &filePath);
 
     /**
-     * @brief createDir
+     *  Creates a directory below a remote path.
      * @param path
      * @param name
      */
     void createDir(const QUrl &path, const QString &name);
 
     /**
-     * @brief resolveFile
+     *  Resolves a remote item for the requested follow-up operation.
      * @param item
      * @param signalType
      */
     void resolveFile(const FMH::MODEL &item, const Syncing::SIGNAL_TYPE &signalType);
 
     /**
-     * @brief setCopyTo
+     *  Sets the local destination used by download operations.
      * @param path
      */
     void setCopyTo(const QUrl &path);
 
     /**
-     * @brief getCopyTo
+     *  Returns the configured local download destination.
      * @return
      */
     QUrl getCopyTo() const;
 
     /**
-     * @brief getUser
+     *  Returns the configured WebDAV user name.
      * @return
      */
     QString getUser() const;
 
     /**
-     * @brief setUploadQueue
+     *  Replaces the queue of local files waiting for upload.
      * @param list
      */
     void setUploadQueue(const QStringList &list);
 
     /**
-     * @brief localToAbstractCloudPath
+     *  Converts a cached local URL back to its cloud-relative path.
      * @param url
      * @return
      */
@@ -129,14 +129,14 @@ private:
 
 Q_SIGNALS:
     /**
-     * @brief listReady
+     *  Emitted when a remote directory listing is available.
      * @param data
      * @param url
      */
     void listReady(FMH::MODEL_LIST data, QUrl url);
 
     /**
-     * @brief itemReady
+     *  Emitted when a requested remote item has been resolved.
      * @param item
      * @param url
      * @param signalType
@@ -144,27 +144,27 @@ Q_SIGNALS:
     void itemReady(FMH::MODEL item, QUrl url, Syncing::SIGNAL_TYPE &signalType);
 
     /**
-     * @brief dirCreated
+     *  Emitted after a remote directory is created.
      * @param item
      * @param url
      */
     void dirCreated(FMH::MODEL item, QUrl url);
 
     /**
-     * @brief uploadReady
+     *  Emitted after an upload completes.
      * @param item
      * @param url
      */
     void uploadReady(FMH::MODEL item, QUrl url);
 
     /**
-     * @brief error
+     *  Reports a WebDAV or local I/O failure.
      * @param message
      */
     void error(QString message);
 
     /**
-     * @brief progress
+     *  Reports transfer progress as a percentage.
      * @param percent
      */
     void progress(int percent);

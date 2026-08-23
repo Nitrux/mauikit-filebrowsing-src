@@ -152,6 +152,7 @@ target_link_libraries(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     PRIVATE
     KF${KF_MAJOR_VERSION}::I18n
     Qt${QT_MAJOR_VERSION}::Core
+    Qt${QT_MAJOR_VERSION}::DBus
     Qt${QT_MAJOR_VERSION}::Quick
     Qt${QT_MAJOR_VERSION}::Qml
     Qt${QT_MAJOR_VERSION}::Sql
@@ -166,6 +167,7 @@ target_link_libraries(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}plugin
     MauiKit${MAUI_MAJOR_VERSION}
     KF${KF_MAJOR_VERSION}::I18n
     Qt${QT_MAJOR_VERSION}::Core
+    Qt${QT_MAJOR_VERSION}::DBus
     Qt${QT_MAJOR_VERSION}::Quick
     Qt${QT_MAJOR_VERSION}::Qml
     Qt${QT_MAJOR_VERSION}::Sql

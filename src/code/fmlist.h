@@ -370,15 +370,15 @@ public:
     Q_ENUM(VIEW_TYPE)
 
     /**
-     * @brief FMList
-     * @param parent
+     *  Creates a file listing model.
+     *  parent The QObject owner.
      */
     FMList(QObject *parent = nullptr);
     ~FMList();
 
     /**
-     * @brief items
-     * @return
+     *  Returns the current native FMH item list.
+     *  The entries exposed by the model.
      */
     const FMH::MODEL_LIST &items() const final override;
 

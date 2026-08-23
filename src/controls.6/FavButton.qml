@@ -5,6 +5,13 @@ import QtQuick.Layouts
 import org.mauikit.controls as Maui
 import org.mauikit.filebrowsing as FB
 
+/**
+ *  QtQuick.Controls.ToolButton
+ *  Toggles whether a file URL is marked as a favorite.
+ *
+ * url identifies the file and isFav reflects its current tagging state. Clicking
+ * the button updates the favorite tag through the Tagging singleton.
+ */
 ToolButton
 {
     id: control

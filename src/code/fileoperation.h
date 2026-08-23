@@ -11,16 +11,31 @@
 class KJob;
 #endif
 
+/**
+ *  Tracks one asynchronous copy, move, or delete operation.
+ *
+ * FileOperation is a process-wide singleton. Starting an operation fails when
+ * another operation is running, when its arguments are empty, or when KIO is
+ * unavailable. Progress is reported as a percentage, byte counts, and bytes per
+ * second; cancel() requests termination of the active job.
+ */
 class FILEBROWSING_EXPORT FileOperation : public QObject
 {
     Q_OBJECT
 
+    /** Whether a file job is currently active. */
     Q_PROPERTY(bool running READ running NOTIFY runningChanged)
+    /** Completion percentage from 0 through 100. */
     Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
+    /** Number of bytes processed by the active job. */
     Q_PROPERTY(qulonglong processedBytes READ processedBytes NOTIFY processedBytesChanged)
+    /** Total byte count reported by the active job. */
     Q_PROPERTY(qulonglong totalBytes READ totalBytes NOTIFY totalBytesChanged)
+    /** Current transfer speed in bytes per second. */
     Q_PROPERTY(qulonglong speed READ speed NOTIFY speedChanged)
+    /** User-facing operation identifier, such as copy, move, or delete. */
     Q_PROPERTY(QString operation READ operation NOTIFY operationChanged)
+    /** Display form of the destination, empty for deletion. */
     Q_PROPERTY(QString destination READ destination NOTIFY destinationChanged)
 
 public:
@@ -40,6 +55,7 @@ public:
     QString operation() const;
     QString destination() const;
 
+    /** Cancels the active operation; does nothing when no job is running. */
     Q_INVOKABLE void cancel();
 
 #ifdef KIO_AVAILABLE

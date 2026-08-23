@@ -21,6 +21,7 @@
 
 #include <QDir>
 #include <QDebug>
+#include <QDBusConnection>
 #include <QIcon>
 #include <QSettings>
 
@@ -137,6 +138,12 @@ FMH::MODEL_LIST PlacesList::getGroup(const KFilePlacesModel &model, const FMStat
     }
 
 #ifdef KIO_AVAILABLE
+    if ((type == FMStatic::PATHTYPE_KEY::DRIVES_PATH || type == FMStatic::PATHTYPE_KEY::REMOVABLE_PATH)
+        && !QDBusConnection::systemBus().isConnected())
+    {
+        return res;
+    }
+
     auto mappedType = mapPathType(type);
     
     const auto group = model.groupIndexes(static_cast<KFilePlacesModel::GroupType>(type == FMStatic::PATHTYPE_KEY::BOOKMARKS_PATH ? mapPathType(FMStatic::PATHTYPE_KEY::PLACES_PATH) : mappedType));
@@ -194,7 +201,6 @@ void PlacesList::setList()
 {
     this->list.clear();
     
-    qDebug() << "Setting PlacesList model" << groups;
     Q_EMIT this->preListChanged();
     
     if (!this->groups.isEmpty())

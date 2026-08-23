@@ -560,7 +560,7 @@ const QString FMStatic::getMime(const QUrl &path)
 static const QUrl thumbnailUrl(const QUrl &url, const QString &mimetype)
 {
 #ifdef KIO_AVAILABLE
-    if (FMStatic::checkFileType(FMStatic::FILTER_TYPE::FONT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::TEXT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::AUDIO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::DOCUMENT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::VIDEO, mimetype) || url.toString().endsWith(QStringLiteral(".appimage"), Qt::CaseInsensitive)) {
+    if (FMStatic::checkFileType(FMStatic::FILTER_TYPE::FONT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::TEXT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::AUDIO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::DOCUMENT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::VIDEO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::IMAGE, mimetype) || url.toString().endsWith(QStringLiteral(".appimage"), Qt::CaseInsensitive)) {
         return QUrl(QStringLiteral("image://thumbnailer/") + url.toString());
     }
 #endif

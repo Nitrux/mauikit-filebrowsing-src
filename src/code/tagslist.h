@@ -7,7 +7,7 @@
 class Tagging;
 class QTimer;
 /**
- * @brief The TagsList class
+ *  Lists and edits tags associated with one or more file URLs.
  * A model of the system tags, ready to be consumed by QML. This model has basic support for browsing, associating, adding and removing tags.
  * 
  * This is a basic model for most actions supported by the MauiKit File Browsing Tagging system. For more details on supported actions and complete API documentation refer to the Tagging page.

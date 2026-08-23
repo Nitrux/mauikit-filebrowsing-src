@@ -63,6 +63,7 @@ option (KIO_AVAILABLE "Use KIO library if it is avalibale, otherwise use default
 
 find_package(Qt${QT_MAJOR_VERSION} ${REQUIRED_QT_VERSION} REQUIRED COMPONENTS
     Core
+    DBus
     Quick
     Sql
     Xml

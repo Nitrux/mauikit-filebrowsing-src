@@ -18,8 +18,9 @@ AsyncImageResponse::AsyncImageResponse(const QString &id, const QSize &requested
     , m_requestedSize(requestedSize)
 {
 #ifdef KIO_AVAILABLE
+    constexpr int maximumPreviewDimension = 2048;
     const QSize effectiveSize = (requestedSize.width() > 0 && requestedSize.height() > 0)
-        ? QSize(qMin(requestedSize.width(), 192), qMin(requestedSize.height(), 192))
+        ? requestedSize.boundedTo(QSize(maximumPreviewDimension, maximumPreviewDimension))
         : QSize(64, 64);
 
     KIO::PreviewJob::setDefaultDevicePixelRatio(qApp->devicePixelRatio());

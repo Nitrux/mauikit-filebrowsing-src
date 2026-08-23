@@ -234,17 +234,14 @@ FM::FM(QObject *parent)
     };
 
     connect(dirLister, static_cast<void (KCoreDirLister::*)(const QUrl &)>(&KCoreDirLister::listingDirCompleted), this, [&](QUrl url) {
-        qDebug() << "PATH CONTENT READY" << url;
         Q_EMIT this->pathContentReady(url);
     });
 
     connect(dirLister, static_cast<void (KCoreDirLister::*)(const QUrl &)>(&KCoreDirLister::listingDirCanceled), this, [&](QUrl url) {
-        qDebug() << "PATH CONTENT READY" << url;
         Q_EMIT this->pathContentReady(url);
     });
 
     connect(dirLister, static_cast<void (KCoreDirLister::*)(const QUrl &, const KFileItemList &items)>(&KCoreDirLister::itemsAdded), this, [&](QUrl dirUrl, KFileItemList items) {
-        qDebug() << "MORE ITEMS WERE ADDED";
         Q_EMIT this->pathContentItemsReady({dirUrl, packItems(items)});
     });
 
@@ -354,7 +351,6 @@ FM::FM(QObject *parent)
 
 void FM::getPathContent(const QUrl &path, const bool &hidden, const bool &onlyDirs, const QStringList &filters, const QDirIterator::IteratorFlags &iteratorFlags)
 {
-    qDebug() << "Getting async path contents" << filters;
     Q_UNUSED(iteratorFlags)
 
     this->dirLister->setShowHiddenFiles(hidden);
@@ -364,8 +360,7 @@ void FM::getPathContent(const QUrl &path, const bool &hidden, const bool &onlyDi
 #ifdef KIO_AVAILABLE
     // this->dirLister->emitChanges ( );
 #endif
-    if (this->dirLister->openUrl(path))
-        qDebug() << "GETTING PATH CONTENT" << path;
+    this->dirLister->openUrl(path);
 }
 
 bool FM::getCloudServerContent(const QUrl &path, const QStringList &filters, const int &depth)
