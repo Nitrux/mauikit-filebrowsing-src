@@ -460,7 +460,7 @@ private:
      */
     FMH::MODEL_LIST getTagContent(const QString &tag, const QStringList &filters = {});
 
-    FMH::MODEL_LIST list = {{}};
+    FMH::MODEL_LIST list;
 
     bool m_autoLoad = true;
     bool m_suppressReload = false;
