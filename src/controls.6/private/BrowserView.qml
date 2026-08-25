@@ -585,6 +585,9 @@ Maui.AltBrowser
                 // }
                 control.itemsSelected(control.range(anchorIndex, index))
 
+            } else if (mouse.button == Qt.LeftButton && control.selectionMode && model.isdir !== "true")
+            {
+                control.itemsSelected([index])
             } else
             {
                 control.itemClicked(index)
@@ -763,6 +766,9 @@ Maui.AltBrowser
                     // }
                     // control.itemsSelected(control.range(lastSelectedIndex, index))
                     control.itemsSelected(control.range(anchorIndex, index))
+                } else if (mouse.button == Qt.LeftButton && control.selectionMode && model.isdir !== "true")
+                {
+                    control.itemsSelected([index])
                 } else
                 {
                     control.itemClicked(index)

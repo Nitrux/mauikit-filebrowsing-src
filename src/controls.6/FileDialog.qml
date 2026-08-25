@@ -102,6 +102,8 @@ import org.mauikit.filebrowsing as FB
 Maui.PopupPage
 {
     id: control
+
+    modal: true
     
     maxHeight: Maui.Handy.isMobile ? parent.height * 0.95 : 500
     maxWidth: 700
@@ -563,10 +565,7 @@ Maui.PopupPage
                 selectionMode: control.mode === FileDialog.Modes.Open
                 onItemClicked: (index) =>
                                {
-                                   if(Maui.Handy.singleClick)
-                                   {
-                                       performAction(index)
-                                   }
+                                   performAction(index)
                                }
                 
                 onItemDoubleClicked: (index) =>
@@ -579,19 +578,24 @@ Maui.PopupPage
                 
                 function performAction(index)
                 {
-                    if(currentFMModel.get(index).isdir == "true")
+                    const item = currentFMModel.get(index)
+                    if (!item)
+                        return
+
+                    if(item.isdir == "true")
                     {
                         openItem(index)
+                        return
                     }
                     
                     switch(control.mode)
                     {
                     case FileDialog.Modes.Open :
-                        addToSelection(currentFMModel.get(index))
+                        addToSelection(item)
                         break;
 
                     case FileDialog.Modes.Save:
-                        textField.text = currentFMModel.get(index).label
+                        textField.text = item.label
                         break;
                     }
                 }
