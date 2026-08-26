@@ -693,7 +693,7 @@ Maui.Page
 
             var pat = /^([a-zA-Z0-9 _-]+)$/
 
-            if(event.count === 1 && pat.test(event.text))
+            if(event.count === 1 && event.key !== Qt.Key_Space && pat.test(event.text))
             {
                 typingQuery += event.text
                 _typingTimer.restart()
