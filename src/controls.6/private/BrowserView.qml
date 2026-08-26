@@ -519,6 +519,13 @@ Maui.AltBrowser
         checkable: control.selectionMode || checked
         readonly property string rawImageSource: height > 32 ? control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size) : ""
         imageSource: control.effectiveAudioThumbnailSource(model.mime, rawImageSource, _audioArtworkProbe.status, _audioArtworkProbe.paintedWidth, _audioArtworkProbe.paintedHeight)
+
+        template.imageColorize: control.audioFallbackImageSource.length > 0
+                                && String(delegate.imageSource) === String(control.audioFallbackImageSource)
+        template.imageColorizationColor: Maui.ColorUtils.tintWithAlpha(delegate.effectiveForegroundColor, Maui.Theme.highlightColor, 0.2)
+        template.imageBrightness: Maui.ColorUtils.grayForColor(template.imageColorizationColor)
+                                  - Maui.ColorUtils.grayForColor("#4d4d4d")
+
         checked: selectionBar ? selectionBar.contains(model.path) : false
         template.iconContainer.opacity: model.hidden == "true" ? 0.5 : 1
         draggable: true
@@ -695,6 +702,13 @@ Maui.AltBrowser
             iconSizeHint: _private.gridIconSize
             readonly property string rawImageSource: control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size)
             imageSource: control.effectiveAudioThumbnailSource(model.mime, rawImageSource, _audioArtworkProbe.status, _audioArtworkProbe.paintedWidth, _audioArtworkProbe.paintedHeight)
+
+            template.imageColorize: control.audioFallbackImageSource.length > 0
+                                    && String(delegate.imageSource) === String(control.audioFallbackImageSource)
+            template.imageColorizationColor: Maui.ColorUtils.tintWithAlpha(delegate.effectiveForegroundColor, Maui.Theme.highlightColor, 0.2)
+            template.imageBrightness: Maui.ColorUtils.grayForColor(template.imageColorizationColor)
+                                      - Maui.ColorUtils.grayForColor("#4d4d4d")
+
             template.fillMode: Image.PreserveAspectFit
             template.maskRadius: 0
             iconSource: resolvedIconSource
