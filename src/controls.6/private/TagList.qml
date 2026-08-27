@@ -78,7 +78,7 @@ Maui.ListBrowser
   {
     anchors.fill: parent
     anchors.leftMargin: Maui.Style.space.medium
-    asynchronous: true
+    asynchronous: false
     active: count === 0 && control.showPlaceHolder
     visible: active
     

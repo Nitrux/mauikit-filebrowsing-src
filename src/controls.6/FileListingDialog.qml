@@ -243,7 +243,7 @@ Maui.PopupPage
         {
             id: _listViewLoader
             
-            asynchronous: true
+            asynchronous: false
             active: control.urls.length > 0
             visible: active
             

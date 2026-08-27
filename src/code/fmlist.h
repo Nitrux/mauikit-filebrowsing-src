@@ -365,7 +365,12 @@ public:
         /**
          * Display the file system entries in a list, with more information details visible.
          */
-        LIST_VIEW
+        LIST_VIEW,
+
+        /**
+         * Display the file system entries in a Miller column view.
+         */
+        MILLER_VIEW
     };
     Q_ENUM(VIEW_TYPE)
 

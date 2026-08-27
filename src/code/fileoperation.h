@@ -68,6 +68,7 @@ private Q_SLOTS:
 
 Q_SIGNALS:
     void started(const QString &operation, int itemCount, const QString &destination);
+    void itemFinished(const QString &operation, const QString &source, const QString &destination);
     void finished(bool success, const QString &errorMessage);
     void runningChanged();
     void progressChanged();

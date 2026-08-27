@@ -143,8 +143,19 @@ FMList::FMList(QObject *parent)
             if (index >= this->list.size() || index < 0)
                 return;
 
-            this->list[index] = item.second;
-            Q_EMIT this->updateModel(index, FMH::modelRoles(item.second));
+            auto &current = this->list[index];
+            QVector<int> changedRoles;
+            for (auto it = item.second.constBegin(); it != item.second.constEnd(); ++it)
+            {
+                if (current.value(it.key()) != it.value())
+                    changedRoles << it.key();
+            }
+
+            if (changedRoles.isEmpty())
+                continue;
+
+            current = item.second;
+            Q_EMIT this->updateModel(index, changedRoles);
         }
     });
 

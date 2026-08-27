@@ -18,6 +18,8 @@ Maui.AltBrowser
 
     headBar.visible: false
 
+    customView: _millerView
+
     title: currentFMList.pathName
 
     enableLassoSelection: true
@@ -55,7 +57,7 @@ Maui.AltBrowser
         value: control.currentView.currentIndex
     }
 
-    viewType: settings.viewType === FB.FMList.ICON_VIEW ? Maui.AltBrowser.ViewType.Grid : Maui.AltBrowser.ViewType.List
+    viewType: settings.viewType === FB.FMList.ICON_VIEW ? Maui.AltBrowser.ViewType.Grid : (settings.viewType === FB.FMList.MILLER_VIEW && objectName !== "searchView" ? Maui.AltBrowser.ViewType.Custom : Maui.AltBrowser.ViewType.List)
 
     onPathChanged:
     {
@@ -91,6 +93,39 @@ Maui.AltBrowser
     }
 
     Keys.enabled: true
+
+    MillerView
+    {
+        id: _millerView
+        anchors.fill: parent
+        visible: control.viewType === Maui.AltBrowser.ViewType.Custom
+        enabled: visible
+        currentFMList: _commonFMList
+        currentFMModel: _browserModel
+        currentPath: control.path
+        selectionMode: control.selectionMode
+        selectionBar: control.selectionBar
+        showHiddenFiles: settings.showHiddenFiles
+        foldersFirst: settings.foldersFirst
+        sortBy: _commonFMList.sortBy
+        listItemSize: control.listItemSize
+        audioFallbackImageSource: control.audioFallbackImageSource
+        previewComponent: control.millerPreviewComponent
+
+        onItemClicked: (index) => control.itemClicked(index)
+        onItemDoubleClicked: (index) => control.itemDoubleClicked(index)
+        onItemRightClicked: (index) => control.itemRightClicked(index)
+        onItemToggled: (index, state) => control.itemToggled(index, state)
+        onKeyPress: (event) => control.keyPress(event)
+        onFolderRequested: (path) => control.path = path
+        onFileRequested: (path) => control.fileRequested(path)
+        onContentDropped: (drop, target) =>
+        {
+            _dropMenu.urls = drop.urls.join(",")
+            _dropMenu.target = target
+            _dropMenu.show()
+        }
+    }
     Keys.onPressed: (event) =>
     {
         control.keyPress(event)
@@ -128,6 +163,11 @@ Maui.AltBrowser
      * @see BrowserSettings
      * @property BrowserSettings BrowserView::settings
      */
+    /**
+     *  Optional compact file preview component used by the Miller view.
+     */
+    property Component millerPreviewComponent: null
+
     readonly property alias settings : _settings
 
     /**
@@ -184,6 +224,12 @@ Maui.AltBrowser
     signal itemDoubleClicked(int index)
 
     /**
+     *  Emitted when the Miller view requests the preview of a file.
+     *  path the file URL to preview
+     */
+    signal fileRequested(string path)
+
+    /**
      * @brief Emitted when an entry has been right clicked.
      * @param index the index position of the item
      */
@@ -236,10 +282,8 @@ Maui.AltBrowser
             control.areaClicked(mouse)
         }
 
-        function onAreRightClicked(mouse)
+        function onAreaRightClicked(mouse)
         {
-            console.log("Area right clicked")
-
             control.currentView.forceActiveFocus()
             control.areaRightClicked(mouse)
         }
@@ -272,7 +316,7 @@ Maui.AltBrowser
         id: _scanningProgress
         width: parent.width
         anchors.bottom: parent.bottom
-        visible: control.loading
+        visible: control.loading && control.objectName === "searchView"
     }
 
     holder.visible: searchLoadingPlaceholder || _holder.visible
@@ -506,7 +550,7 @@ Maui.AltBrowser
 
         width: ListView.view.width
 
-        iconSource: resolvedIconSource
+        iconSource: rawImageSource.length > 0 && !thumbnailFailed ? "" : resolvedIconSource
 
         label1.text: model.label ? model.label : ""
         label2.text: control.objectName === "searchView" ? delegate.pathForDisplay(model.path) : ""
@@ -518,6 +562,8 @@ Maui.AltBrowser
 
         checkable: control.selectionMode || checked
         readonly property string rawImageSource: height > 32 ? control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size) : ""
+        readonly property bool thumbnailFailed: template.iconItem
+                                                && template.iconItem.image.status === Image.Error
         imageSource: control.effectiveAudioThumbnailSource(model.mime, rawImageSource, _audioArtworkProbe.status, _audioArtworkProbe.paintedWidth, _audioArtworkProbe.paintedHeight)
 
         template.imageColorize: control.audioFallbackImageSource.length > 0
@@ -701,6 +747,8 @@ Maui.AltBrowser
             template.labelSizeHint: 42
             iconSizeHint: _private.gridIconSize
             readonly property string rawImageSource: control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size)
+            readonly property bool thumbnailFailed: template.iconItem
+                                                    && template.iconItem.image.status === Image.Error
             imageSource: control.effectiveAudioThumbnailSource(model.mime, rawImageSource, _audioArtworkProbe.status, _audioArtworkProbe.paintedWidth, _audioArtworkProbe.paintedHeight)
 
             template.imageColorize: control.audioFallbackImageSource.length > 0
@@ -711,7 +759,7 @@ Maui.AltBrowser
 
             template.fillMode: Image.PreserveAspectFit
             template.maskRadius: 0
-            iconSource: resolvedIconSource
+            iconSource: rawImageSource.length > 0 && !thumbnailFailed ? "" : resolvedIconSource
             label1.text: model.label
             label2.font.pointSize: Maui.Style.fontSizes.tiny
             label2.text: model.mime ? (model.mime === "inode/directory" ? (model.count ? model.count + i18nd("mauikitfilebrowsing", " items") : "") : Maui.Handy.formatSize(model.size)) : ""

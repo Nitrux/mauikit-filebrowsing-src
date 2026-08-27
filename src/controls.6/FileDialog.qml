@@ -499,7 +499,7 @@ Maui.PopupPage
             
             headBar.leftContent: Loader
             {
-                asynchronous: true
+                asynchronous: false
                 sourceComponent: Maui.ToolActions
                 {
                     expanded: true

@@ -28,6 +28,9 @@ private:
     QSize m_requestedSize;
     QImage m_image;
     QString m_error;
+#ifdef KIO_AVAILABLE
+    QString m_cacheKey;
+#endif
     bool m_done = false;
 #ifdef KIO_AVAILABLE
     QPointer<KIO::PreviewJob> m_job;

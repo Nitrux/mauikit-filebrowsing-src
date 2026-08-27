@@ -223,7 +223,8 @@ FM::FM(QObject *parent)
 {
 
 #ifdef KIO_AVAILABLE
-    this->dirLister->setDelayedMimeTypes(true);
+    this->dirLister->setDelayedMimeTypes(false);
+    this->dirLister->setRequestMimeTypeWhileListing(true);
     this->dirLister->setAutoUpdate(true);
 
     const static auto packItems = [](const KFileItemList &items) -> FMH::MODEL_LIST {

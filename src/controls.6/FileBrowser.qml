@@ -41,7 +41,7 @@ import "private" as Private
  *
  * This control exposes a series of convenient properties and functions for filtering and sorting, for creating new entries, perform searches, and modify the entries.
  *
- * There are two different possible ways to display the contents: Grid and List, using the `settings.viewType` property.
+ * There are three possible ways to display the contents: Grid, List, and Miller columns, using the `settings.viewType` property.
  * @see FMList::VIEW_TYPE
  *
  * More browsing properties can be tweaked via the exposed `settings` alias property.
@@ -164,6 +164,11 @@ Maui.Page
     property alias audioFallbackImageSource: _browser.audioFallbackImageSource
 
     /**
+     *  Optional compact file preview component used by the Miller view.
+     */
+    property alias millerPreviewComponent: _browser.millerPreviewComponent
+
+    /**
      * @brief Drop area component, for dropping files.
      * By default some of the drop actions are handled, for other type of URIs this alias can be used to handle those.
      *
@@ -186,13 +191,14 @@ Maui.Page
      *  @brief Current view of the file browser. Possible views are:
      * - List = MauiKit::ListBrowser
      * - Grid = MauiKit::GridBrowser
+     * - Miller = the file-aware Miller column view
      * @property Item FileBrowser::currentView
      */
     readonly property QtObject currentView : _stackView.currentItem.browser
 
     /**
      * @brief The file browser model list.
-     * The List and Grid views use the same FMList.
+     * The List and Grid views use the same FMList. The Miller view uses it for the current column and creates its parent and preview models.
      * @see FMList
      */
     readonly property FB.FMList currentFMList : view.currentFMList
@@ -202,6 +208,67 @@ Maui.Page
      * @see MauiModel
      */
     readonly property Maui.BaseModel currentFMModel : view.currentFMModel
+
+    QtObject
+    {
+        id: _pasteSelection
+
+        property bool pending: false
+        property string destination
+        property string url
+        property var list: null
+        property int attempts: 0
+    }
+
+    Timer
+    {
+        id: _pasteSelectionTimer
+        interval: Maui.Style.units.shortDuration
+        repeat: true
+
+        onTriggered:
+        {
+            if (control.selectPastedFile())
+            {
+                stop()
+            } else if (++_pasteSelection.attempts >= 10)
+            {
+                stop()
+                _pasteSelection.pending = false
+            }
+        }
+    }
+
+    Connections
+    {
+        target: FB.FileOperation
+
+        function onItemFinished(operation, source, destination)
+        {
+            if (!_pasteSelection.pending || operation !== "paste" || control.currentFMList !== _pasteSelection.list)
+                return
+
+            if (String(FB.FM.parentDir(destination)) !== _pasteSelection.destination)
+                return
+
+            _pasteSelection.url = String(destination)
+            _pasteSelection.attempts = 0
+            control.currentFMList.refresh()
+            _pasteSelectionTimer.restart()
+        }
+
+        function onFinished(success, errorMessage)
+        {
+            if (FB.FileOperation.operation !== "paste")
+                return
+
+            if (!success)
+            {
+                _pasteSelection.pending = false
+                _pasteSelectionTimer.stop()
+            }
+        }
+    }
 
     /**
      * @brief Whether the file browser current view is the search view.
@@ -301,6 +368,12 @@ Maui.Page
      * @param index the index position of the item
      */
     signal itemDoubleClicked(int index)
+
+    /**
+     *  Emitted when the Miller view requests the preview of a file.
+     *  path the file URL to preview
+     */
+    signal fileRequested(string path)
 
     /**
      * @brief Emitted when an item has been right clicked. On mobile devices this is translated from a long press and release.
@@ -621,7 +694,8 @@ Maui.Page
 
             onOpened:
             {
-                item = control.currentFMModel.get(control.currentIndex)
+                if (!item.path)
+                    item = control.currentFMModel.get(control.currentIndex)
 
                 if(_renameDialog.textEntry.text.lastIndexOf(".") >= 0)
                 {
@@ -710,7 +784,7 @@ Maui.Page
             // Shortcuts for renaming
             if((event.key === Qt.Key_F2))
             {
-                var dialog = renameDialogComponent.createObject(control)
+                var dialog = renameDialogComponent.createObject(control, ({'item': control.currentFMModel.get(index)}))
                 dialog.open()
                 event.accepted = true
             }
@@ -829,6 +903,12 @@ Maui.Page
         {
             control.setCurrentIndex(index)
             control.itemDoubleClicked(index)
+            control.currentView.forceActiveFocus()
+        }
+
+        function onFileRequested(path)
+        {
+            control.fileRequested(path)
             control.currentView.forceActiveFocus()
         }
 
@@ -1078,10 +1158,41 @@ Maui.Page
         if (control.readOnly || !control.currentFMList || !control.currentFMList.clipboardHasContent)
             return
 
+        const clipboard = Maui.Handy.getClipboard()
+        const urls = clipboard.urls || []
+        const trackPaste = urls.length > 0 && !FB.FileOperation.running
+
+        _pasteSelection.pending = trackPaste
+        _pasteSelection.destination = String(control.currentPath)
+        _pasteSelection.url = ""
+        _pasteSelection.attempts = 0
+        _pasteSelection.list = control.currentFMList
+
         control.currentFMList.paste()
+
+        if (trackPaste && !FB.FileOperation.running)
+            _pasteSelection.pending = false
 
         if (control.selectionBar)
             control.selectionBar.clear()
+    }
+
+    function selectPastedFile()
+    {
+        if (!_pasteSelection.pending || !_pasteSelection.url || control.currentFMList !== _pasteSelection.list)
+            return false
+
+        const sourceIndex = _pasteSelection.list.indexOfFile(_pasteSelection.url)
+        if (sourceIndex < 0)
+            return false
+
+        const modelIndex = control.currentFMModel.mappedFromSource(sourceIndex)
+        if (modelIndex < 0)
+            return false
+
+        control.setCurrentIndex(modelIndex)
+        _pasteSelection.pending = false
+        return true
     }
 
     /**
@@ -1158,8 +1269,9 @@ Maui.Page
     /**
      * @brief Open a folder location
      * @param path the URL of the folder location
+     * @param transitionDirection the optional Miller column transition direction
      **/
-    function openFolder(path)
+    function openFolder(path, transitionDirection)
     {
         if(!String(path).length)
         {
@@ -1171,7 +1283,15 @@ Maui.Page
             control.quitSearch()
         }
 
-        control.currentPath = path
+        if(control.settings.viewType === FB.FMList.MILLER_VIEW
+                && control.currentView
+                && typeof control.currentView.navigateTo === "function")
+        {
+            control.currentView.navigateTo(path, transitionDirection)
+        } else
+        {
+            control.currentPath = path
+        }
         _browser.forceActiveFocus()
     }
 
@@ -1180,7 +1300,7 @@ Maui.Page
      **/
     function goBack()
     {
-        openFolder(control.currentFMList.previousPath())
+        openFolder(control.currentFMList.previousPath(), -1)
     }
 
     /**
@@ -1188,7 +1308,7 @@ Maui.Page
      **/
     function goForward()
     {
-        openFolder(control.currentFMList.posteriorPath())
+        openFolder(control.currentFMList.posteriorPath(), 1)
     }
 
     /**
@@ -1196,7 +1316,7 @@ Maui.Page
      **/
     function goUp()
     {
-        openFolder(control.currentFMList.parentPath)
+        openFolder(control.currentFMList.parentPath, -1)
     }
 
     /**
@@ -1204,7 +1324,7 @@ Maui.Page
      */
     function nextItem()
     {
-        if(_browser.viewType === Maui.AltBrowser.ViewType.List)
+        if(control.settings.viewType === FB.FMList.LIST_VIEW || control.settings.viewType === FB.FMList.MILLER_VIEW)
             _browser.currentView.flickable.incrementCurrentIndex()
         else
             _browser.currentView.flickable.moveCurrentIndexRight()
@@ -1216,7 +1336,7 @@ Maui.Page
      */
     function previousItem()
     {
-        if(_browser.viewType === Maui.AltBrowser.ViewType.List)
+        if(control.settings.viewType === FB.FMList.LIST_VIEW || control.settings.viewType === FB.FMList.MILLER_VIEW)
             _browser.currentView.flickable.decrementCurrentIndex()
         else
             _browser.currentView.flickable.moveCurrentIndexLeft()

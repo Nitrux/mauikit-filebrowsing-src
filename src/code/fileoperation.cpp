@@ -59,6 +59,10 @@ bool FileOperation::startCopy(const QList<QUrl> &urls, const QUrl &destination, 
     Q_EMIT operation->destinationChanged();
     Q_EMIT operation->started(operation->m_operation, urls.count(), operation->m_destination);
 
+    QObject::connect(job, &KIO::CopyJob::copyingDone, operation, [operation](auto *, const QUrl &from, const QUrl &to, const auto &, bool, bool) {
+        Q_EMIT operation->itemFinished(operation->m_operation, from.toString(), to.toString());
+    });
+
     QObject::connect(job, SIGNAL(percentChanged(KJob*, unsigned long)), operation, SLOT(onPercent(KJob*, unsigned long)));
     QObject::connect(job, SIGNAL(processedSize(KJob*, qulonglong)), operation, SLOT(onProcessedSize(KJob*, qulonglong)));
     QObject::connect(job, SIGNAL(totalSize(KJob*, qulonglong)), operation, SLOT(onTotalSize(KJob*, qulonglong)));
@@ -116,6 +120,10 @@ bool FileOperation::startMove(const QList<QUrl> &urls, const QUrl &destination, 
     Q_EMIT operation->operationChanged();
     Q_EMIT operation->destinationChanged();
     Q_EMIT operation->started(operation->m_operation, urls.count(), operation->m_destination);
+
+    QObject::connect(job, &KIO::CopyJob::copyingDone, operation, [operation](auto *, const QUrl &from, const QUrl &to, const auto &, bool, bool) {
+        Q_EMIT operation->itemFinished(operation->m_operation, from.toString(), to.toString());
+    });
 
     QObject::connect(job, SIGNAL(percentChanged(KJob*, unsigned long)), operation, SLOT(onPercent(KJob*, unsigned long)));
     QObject::connect(job, SIGNAL(processedSize(KJob*, qulonglong)), operation, SLOT(onProcessedSize(KJob*, qulonglong)));

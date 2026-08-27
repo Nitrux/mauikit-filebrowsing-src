@@ -129,6 +129,7 @@ ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} PATH private SOU
     controls.${QT_MAJOR_VERSION}/private/BrowserSettings.qml
 
     controls.${QT_MAJOR_VERSION}/private/BrowserView.qml
+    controls.${QT_MAJOR_VERSION}/private/MillerView.qml
 
     controls.${QT_MAJOR_VERSION}/private/TagDelegate.qml
     controls.${QT_MAJOR_VERSION}/private/TagList.qml)

@@ -73,7 +73,7 @@ QtObject
   property bool group : false
   
   /**
-   * @brief The preferred view type, Can be a list or a grid.
+   * @brief The preferred view type, Can be a list, a grid, or Miller columns.
    * By default this is set to `FMList.ICON_VIEW`
    * @see FMList::VIEW_TYPE
    */
