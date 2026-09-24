@@ -747,7 +747,6 @@ Maui.Page
             const index = control.currentFMList.indexOfName(typingQuery)
             if(index > -1)
             {
-                console.log("FOUDN TRYPIGN IDNEX", index)
                 control.setCurrentIndex(control.currentFMModel.mappedFromSource(index))
             }
 

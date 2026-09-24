@@ -26,6 +26,7 @@ Maui.AltBrowser
 
     gridView.itemSize : control.gridItemSize
     gridView.itemHeight: gridView.cellWidth
+    gridView.flickable.reuseItems: false
 
     background: null
     /**
@@ -761,6 +762,7 @@ Maui.AltBrowser
             template.maskRadius: 0
             iconSource: rawImageSource.length > 0 && !thumbnailFailed ? "" : resolvedIconSource
             label1.text: model.label
+            label1.wrapMode: Text.NoWrap
             label2.font.pointSize: Maui.Style.fontSizes.tiny
             label2.text: model.mime ? (model.mime === "inode/directory" ? (model.count ? model.count + i18nd("mauikitfilebrowsing", " items") : "") : Maui.Handy.formatSize(model.size)) : ""
 

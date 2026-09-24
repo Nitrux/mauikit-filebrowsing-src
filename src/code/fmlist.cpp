@@ -111,6 +111,34 @@ bool clipboardCutOperation(const QMimeData *mimeData)
 
     return false;
 }
+
+QUrl normalizedPath(const QUrl &path)
+{
+    return path.adjusted(QUrl::NormalizePathSegments | QUrl::StripTrailingSlash);
+}
+
+bool belongsToPath(const FMH::MODEL &item, const QUrl &path)
+{
+    const auto itemPath = QUrl(item.value(FMH::MODEL_KEY::PATH));
+    if (!itemPath.isValid() || itemPath.isEmpty())
+        return false;
+
+    const auto itemParent = itemPath.adjusted(QUrl::RemoveFilename | QUrl::NormalizePathSegments | QUrl::StripTrailingSlash);
+    return normalizedPath(itemParent) == normalizedPath(path);
+}
+
+FMH::MODEL_LIST contentForPath(const FMH::MODEL_LIST &content, const QUrl &path)
+{
+    FMH::MODEL_LIST filtered;
+    filtered.reserve(content.size());
+
+    for (const auto &item : content) {
+        if (belongsToPath(item, path))
+            filtered << item;
+    }
+
+    return filtered;
+}
 }
 
 FMList::FMList(QObject *parent)
@@ -126,7 +154,12 @@ FMList::FMList(QObject *parent)
         }
     });
 
-    connect(this->fm, &FM::pathContentReady, [this](QUrl) {
+    connect(this->fm, &FM::pathContentReady, [this](QUrl path) {
+        if (normalizedPath(path) != normalizedPath(this->path))
+            return;
+
+        this->list = contentForPath(this->list, this->path);
+
         Q_EMIT this->preListChanged();
         this->sortList();
         this->setStatus(this->emptyStateStatus());
@@ -164,14 +197,16 @@ FMList::FMList(QObject *parent)
     });
 
     connect(this->fm, &FM::pathContentItemsReady, [this](FMStatic::PATH_CONTENT res) {
-        if (res.path != this->path)
+        if (normalizedPath(res.path) != normalizedPath(this->path))
             return;
 
-        this->appendToList(res.content);
+        const auto content = contentForPath(res.content, this->path);
+        if (!content.isEmpty())
+            this->appendToList(content);
     });
 
     connect(this->fm, &FM::pathContentItemsRemoved, [this](FMStatic::PATH_CONTENT res) {
-        if (res.path != this->path)
+        if (normalizedPath(res.path) != normalizedPath(this->path))
             return;
 
         if (res.path.isLocalFile() && !FMH::fileExists(res.path)) {
