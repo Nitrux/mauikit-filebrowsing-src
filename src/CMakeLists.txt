@@ -34,6 +34,7 @@ set(headers
     code/placeslist.h
     code/downloader.h
     code/fileloader.h
+    code/fscrypt.h
     code/tagging.h
     code/tagdb.h
     code/moduleinfo.h)
@@ -83,6 +84,9 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     code/fileloader.cpp
     code/fileloader.h
 
+    code/fscrypt.cpp
+    code/fscrypt.h
+
     code/tagging.cpp
     code/tagging.h
 
@@ -108,6 +112,7 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}plugin
 
     code/openwithmodel.cpp
     code/openwithmodel.h
+    code/fscrypt.h
     ${filebrowsing_QML_QRC})
 
 ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} SOURCES
@@ -118,6 +123,7 @@ ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} SOURCES
     controls.${QT_MAJOR_VERSION}/FileDialog.qml
     controls.${QT_MAJOR_VERSION}/FileListingDialog.qml
     controls.${QT_MAJOR_VERSION}/FileOperationDialog.qml
+    controls.${QT_MAJOR_VERSION}/FscryptDialog.qml
     controls.${QT_MAJOR_VERSION}/NewTagDialog.qml
     controls.${QT_MAJOR_VERSION}/PlacesListBrowser.qml
     controls.${QT_MAJOR_VERSION}/TagsDialog.qml

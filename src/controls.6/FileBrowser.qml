@@ -471,7 +471,7 @@ Maui.Page
         }
 
         Keys.enabled: _filterButton.checked
-        Keys.onPressed:
+        Keys.onPressed: (event) =>
         {
             // Shortcut for clearing selection
             if(event.key == Qt.Key_Up)
