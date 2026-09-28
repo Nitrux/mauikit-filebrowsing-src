@@ -4,13 +4,38 @@
 
 #include "fscrypt.h"
 
+#include <algorithm>
+
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QIODevice>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStorageInfo>
 
 #include <KLocalizedString>
+
+namespace
+{
+QString formatErrorMessage(QString message)
+{
+    message = message.trimmed();
+    const QString errorPrefix = QStringLiteral("[ERROR]");
+    if (!message.startsWith(errorPrefix))
+        return message;
+
+    message = message.mid(errorPrefix.size()).trimmed();
+    if (message.startsWith(QStringLiteral("fscrypt ")))
+    {
+        const int separator = message.indexOf(QStringLiteral(": "));
+        if (separator > 0)
+            message = message.mid(separator + 2).trimmed();
+    }
+
+    return message.isEmpty() ? i18n("Error: fscrypt failed.") : i18n("Error: %1", message);
+}
+}
 
 Fscrypt::Fscrypt(QObject *parent)
     : QObject(parent)
@@ -20,6 +45,37 @@ Fscrypt::Fscrypt(QObject *parent)
 bool Fscrypt::running() const
 {
     return m_running;
+}
+
+bool Fscrypt::isLiveSession()
+{
+    QFile cmdline(QStringLiteral("/proc/cmdline"));
+    if (!cmdline.open(QIODevice::ReadOnly))
+        return false;
+
+    const auto arguments = cmdline.readAll().split(' ');
+    return std::any_of(arguments.cbegin(), arguments.cend(), [](const QByteArray &argument) {
+        return argument == QByteArrayLiteral("boot=casper");
+    });
+}
+
+QString Fscrypt::availabilityMessage(const QUrl &directory) const
+{
+    if (isLiveSession())
+        return i18n("Live environments are not supported.");
+
+    if (!directory.isLocalFile() || !QFileInfo(directory.toLocalFile()).isDir())
+        return i18n("The selected directory is not available locally.");
+
+    const QStorageInfo storage(directory.toLocalFile());
+    if (!storage.isValid() || !storage.isReady() || storage.rootPath().isEmpty())
+        return i18n("The filesystem containing the directory is not available.");
+
+    const auto filesystemType = storage.fileSystemType().toLower();
+    if (filesystemType == QByteArrayLiteral("overlay") || filesystemType == QByteArrayLiteral("overlayfs"))
+        return i18n("This directory is on an OverlayFS filesystem. Choose a directory on a persistent filesystem.");
+
+    return {};
 }
 
 void Fscrypt::setRunning(bool running)
@@ -125,7 +181,8 @@ bool Fscrypt::startProcess(const QStringList &arguments, const QString &passphra
         const QString output = QString::fromLocal8Bit(process->readAllStandardOutput()).trimmed();
         const QString error = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
         const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
-        const QString message = success ? (output.isEmpty() ? i18n("Directory encrypted.") : output) : (!error.isEmpty() ? error : (!output.isEmpty() ? output : i18n("fscrypt failed.")));
+        const QString processMessage = !error.isEmpty() ? error : (!output.isEmpty() ? output : i18n("fscrypt failed."));
+        const QString message = success ? (output.isEmpty() ? i18n("Directory encrypted.") : output) : formatErrorMessage(processMessage);
 
         finish(process, success, message);
     });
@@ -201,6 +258,13 @@ void Fscrypt::encryptDirectory(const QUrl &directory, const QString &protectorNa
         return;
     }
 
+    const QString environmentError = availabilityMessage(directory);
+    if (!environmentError.isEmpty())
+    {
+        Q_EMIT finished(false, environmentError);
+        return;
+    }
+
     const QString name = protectorName.trimmed();
     if (name.isEmpty())
     {
@@ -251,6 +315,13 @@ void Fscrypt::createEncryptedDirectory(const QUrl &parentDirectory,
     if (!parentDirectory.isLocalFile() || !QFileInfo(parentDirectory.toLocalFile()).isDir())
     {
         Q_EMIT finished(false, i18n("The destination directory is not available locally."));
+        return;
+    }
+
+    const QString environmentError = availabilityMessage(parentDirectory);
+    if (!environmentError.isEmpty())
+    {
+        Q_EMIT finished(false, environmentError);
         return;
     }
 

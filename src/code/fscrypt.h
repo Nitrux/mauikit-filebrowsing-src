@@ -22,6 +22,8 @@ public:
 
     bool running() const;
 
+    Q_INVOKABLE QString availabilityMessage(const QUrl &directory) const;
+
     Q_INVOKABLE void encryptDirectory(const QUrl &directory,
                                        const QString &protectorName,
                                        const QString &passphrase);
@@ -49,6 +51,7 @@ private:
     void finish(QProcess *process, bool success, const QString &message);
     void fail(const QString &message);
     void clearPendingOperation();
+    static bool isLiveSession();
     void setRunning(bool running);
 
     QProcess *m_process = nullptr;

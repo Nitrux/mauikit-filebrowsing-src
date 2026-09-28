@@ -31,6 +31,10 @@ Maui.InfoDialog
                                        && protectorName.length > 0
                                        && passphrase.length > 0
                                        && passphrase === confirmation
+    readonly property string environmentMessage: _fscrypt.availabilityMessage(control.directory)
+    readonly property bool environmentBlocked: environmentMessage.length > 0
+    readonly property bool formEnabled: !environmentBlocked && !_fscrypt.running
+    property string errorMessage: ""
 
     signal operationCompleted(bool success)
 
@@ -65,6 +69,12 @@ Maui.InfoDialog
     onOpened:
     {
         updateValidation()
+        if (environmentBlocked)
+        {
+            showError(environmentMessage)
+            return
+        }
+
         if (createDirectory)
             _directoryNameField.forceActiveFocus()
         else
@@ -90,9 +100,22 @@ Maui.InfoDialog
             close()
     }
 
+    Maui.Chip
+    {
+        id: _errorMessage
+        Layout.fillWidth: true
+        Layout.preferredHeight: visible ? implicitHeight : -control.spacing
+        visible: control.errorMessage.length > 0
+        text: control.errorMessage
+        color: Maui.Theme.negativeBackgroundColor
+        label.horizontalAlignment: Text.AlignHCenter
+        label.wrapMode: Text.Wrap
+    }
+
     Maui.TextField
     {
         id: _directoryNameField
+        enabled: control.formEnabled
         visible: control.createDirectory
         Layout.fillWidth: true
         Layout.topMargin: Maui.Style.space.medium
@@ -105,6 +128,7 @@ Maui.InfoDialog
     Maui.TextField
     {
         id: _directoryPathField
+        enabled: control.formEnabled
         visible: !control.createDirectory
         Layout.fillWidth: true
         Layout.topMargin: Maui.Style.space.medium
@@ -116,6 +140,7 @@ Maui.InfoDialog
     Maui.TextField
     {
         id: _protectorNameField
+        enabled: control.formEnabled
         Layout.fillWidth: true
         Maui.Controls.title: i18n("Passphrase name")
         placeholderText: i18n("A name for this passphrase")
@@ -126,6 +151,7 @@ Maui.InfoDialog
     Maui.PasswordField
     {
         id: _passphraseField
+        enabled: control.formEnabled
         Layout.fillWidth: true
         echoMode: TextInput.Password
         passwordMaskDelay: 0
@@ -137,6 +163,7 @@ Maui.InfoDialog
     Maui.PasswordField
     {
         id: _confirmationField
+        enabled: control.formEnabled
         Layout.fillWidth: true
         echoMode: TextInput.Password
         passwordMaskDelay: 0
@@ -173,7 +200,7 @@ Maui.InfoDialog
                 return
             }
 
-            control.alert(message, 2)
+            control.showError(message)
             control.updateValidation()
         }
     }
@@ -202,33 +229,39 @@ Maui.InfoDialog
         if (createDirectory && !validDirectoryName)
         {
             if (directoryName.length === 0)
-                alert(i18n("Directory name can not be empty."), 2)
+                showError(i18n("Directory name can not be empty."))
             else if (directoryExists)
-                alert(i18n("A directory with the same name already exists."), 2)
+                showError(i18n("A directory with the same name already exists."))
             else
-                alert(i18n("Enter a valid directory name."), 2)
+                showError(i18n("Enter a valid directory name."))
             return false
         }
 
         if (protectorName.length === 0)
         {
-            alert(i18n("Passphrase name can not be empty."), 2)
+            showError(i18n("Passphrase name can not be empty."))
             return false
         }
 
         if (passphrase.length === 0)
         {
-            alert(i18n("Passphrase can not be empty."), 2)
+            showError(i18n("Passphrase can not be empty."))
             return false
         }
 
         if (passphrase !== confirmation)
         {
-            alert(i18n("The passphrases do not match."), 2)
+            showError(i18n("The passphrases do not match."))
             return false
         }
 
         return true
+    }
+
+    function showError(message)
+    {
+        const value = String(message).trim()
+        errorMessage = value.startsWith("Error:") ? value : i18n("Error: %1", value)
     }
 
     function updateValidation()
@@ -242,7 +275,7 @@ Maui.InfoDialog
         if (applyButton)
         {
             applyButton.text = createDirectory ? i18n("Create") : i18n("Encrypt")
-            applyButton.enabled = validInput && !_fscrypt.running
+            applyButton.enabled = validInput && control.formEnabled
         }
 
         const cancelButton = standardButton(Dialog.Cancel)
