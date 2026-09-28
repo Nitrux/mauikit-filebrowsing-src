@@ -33,7 +33,13 @@ QString formatErrorMessage(QString message)
             message = message.mid(separator + 2).trimmed();
     }
 
-    return message.isEmpty() ? i18n("Error: fscrypt failed.") : i18n("Error: %1", message);
+    if (message.contains(QStringLiteral("encryption not enabled on filesystem")))
+        return i18n("Encryption is not enabled on the filesystem containing this directory. Enable F2FS encryption support before trying again.");
+
+    if (message.contains(QStringLiteral("doesn't support encryption on overlay filesystems")))
+        return i18n("This directory is on OverlayFS, which does not support fscrypt. Choose a directory on a persistent, non-overlay filesystem.");
+
+    return message.isEmpty() ? i18n("fscrypt failed.") : message;
 }
 }
 
@@ -73,7 +79,7 @@ QString Fscrypt::availabilityMessage(const QUrl &directory) const
 
     const auto filesystemType = storage.fileSystemType().toLower();
     if (filesystemType == QByteArrayLiteral("overlay") || filesystemType == QByteArrayLiteral("overlayfs"))
-        return i18n("This directory is on an OverlayFS filesystem. Choose a directory on a persistent filesystem.");
+        return i18n("This directory is on OverlayFS, which does not support fscrypt. Choose a directory on a persistent, non-overlay filesystem.");
 
     return {};
 }

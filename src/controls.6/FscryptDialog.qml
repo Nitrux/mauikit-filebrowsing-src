@@ -44,6 +44,7 @@ Maui.InfoDialog
              : i18n("Encrypt this empty directory with fscrypt.")
     standardButtons: Dialog.Apply | Dialog.Cancel
     template.iconVisible: false
+    contentItem.ScrollBar.vertical.policy: ScrollBar.AlwaysOff
 
     background: Rectangle
     {
@@ -98,18 +99,6 @@ Maui.InfoDialog
     {
         if (!_fscrypt.running)
             close()
-    }
-
-    Maui.Chip
-    {
-        id: _errorMessage
-        Layout.fillWidth: true
-        Layout.preferredHeight: visible ? implicitHeight : -control.spacing
-        visible: control.errorMessage.length > 0
-        text: control.errorMessage
-        color: Maui.Theme.negativeBackgroundColor
-        label.horizontalAlignment: Text.AlignHCenter
-        label.wrapMode: Text.Wrap
     }
 
     Maui.TextField
@@ -175,6 +164,18 @@ Maui.InfoDialog
             if (applyButton)
                 applyButton.forceActiveFocus()
         }
+    }
+
+    Maui.Chip
+    {
+        id: _errorMessage
+        Layout.fillWidth: true
+        Layout.preferredHeight: visible ? implicitHeight : -control.spacing
+        visible: control.errorMessage.length > 0
+        text: control.errorMessage
+        color: Maui.Theme.negativeBackgroundColor
+        label.horizontalAlignment: Text.AlignHCenter
+        label.wrapMode: Text.Wrap
     }
 
     FB.Fscrypt
@@ -260,8 +261,7 @@ Maui.InfoDialog
 
     function showError(message)
     {
-        const value = String(message).trim()
-        errorMessage = value.startsWith("Error:") ? value : i18n("Error: %1", value)
+        errorMessage = String(message).trim()
     }
 
     function updateValidation()
