@@ -84,6 +84,125 @@ QString Fscrypt::availabilityMessage(const QUrl &directory) const
     return {};
 }
 
+QString Fscrypt::cachedStatus(const QUrl &directory) const
+{
+    if (!directory.isLocalFile())
+        return QStringLiteral("unknown");
+
+    const QString path = QDir::cleanPath(directory.toLocalFile());
+    return m_statusCache.value(path, QStringLiteral("unknown"));
+}
+
+void Fscrypt::requestStatus(const QUrl &directory)
+{
+    if (!directory.isLocalFile())
+        return;
+
+    const QString path = QDir::cleanPath(directory.toLocalFile());
+    if (path.isEmpty())
+        return;
+
+    if (m_statusCache.contains(path))
+    {
+        Q_EMIT statusChanged(directory, m_statusCache.value(path));
+        return;
+    }
+
+    if (!m_statusPending.contains(path))
+    {
+        m_statusPending.insert(path);
+        m_statusQueue.enqueue(QUrl::fromLocalFile(path));
+    }
+
+    startNextStatusRequest();
+}
+
+void Fscrypt::invalidateStatus(const QUrl &directory)
+{
+    if (!directory.isLocalFile())
+        return;
+
+    const QString path = QDir::cleanPath(directory.toLocalFile());
+    if (path.isEmpty())
+        return;
+
+    m_statusCache.remove(path);
+    Q_EMIT statusChanged(directory, QStringLiteral("unknown"));
+    requestStatus(directory);
+}
+
+QString Fscrypt::parseStatus(const QString &output, bool success)
+{
+    const QString lowerOutput = output.toLower();
+    if (lowerOutput.contains(QStringLiteral("is encrypted with fscrypt")) || lowerOutput.contains(QStringLiteral("policy:")))
+    {
+        if (lowerOutput.contains(QStringLiteral("unlocked: yes")))
+            return QStringLiteral("encrypted_unlocked");
+
+        if (lowerOutput.contains(QStringLiteral("unlocked: no")))
+            return QStringLiteral("encrypted_locked");
+
+        return QStringLiteral("encrypted");
+    }
+
+    if (lowerOutput.contains(QStringLiteral("not encrypted")))
+        return QStringLiteral("unencrypted");
+
+    return success ? QStringLiteral("unencrypted") : QStringLiteral("unknown");
+}
+
+void Fscrypt::startNextStatusRequest()
+{
+    if (m_statusProcess || m_statusQueue.isEmpty())
+        return;
+
+    const QUrl directory = m_statusQueue.dequeue();
+    const QString path = QDir::cleanPath(directory.toLocalFile());
+    const auto executable = QStandardPaths::findExecutable(QStringLiteral("fscrypt"));
+    if (executable.isEmpty())
+    {
+        m_statusPending.remove(path);
+        m_statusCache.insert(path, QStringLiteral("unknown"));
+        Q_EMIT statusChanged(directory, QStringLiteral("unknown"));
+        startNextStatusRequest();
+        return;
+    }
+
+    auto *process = new QProcess(this);
+    m_statusProcess = process;
+
+    connect(process, &QProcess::errorOccurred, this, [this, process, directory, path](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart || m_statusProcess != process)
+            return;
+
+        m_statusPending.remove(path);
+        m_statusCache.insert(path, QStringLiteral("unknown"));
+        Q_EMIT statusChanged(directory, QStringLiteral("unknown"));
+        m_statusProcess = nullptr;
+        process->deleteLater();
+        startNextStatusRequest();
+    });
+
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this, process, directory, path](int exitCode, QProcess::ExitStatus exitStatus) {
+        if (m_statusProcess != process)
+            return;
+
+        const QString output = QString::fromLocal8Bit(process->readAllStandardOutput())
+                                   + QStringLiteral("\n")
+                                   + QString::fromLocal8Bit(process->readAllStandardError());
+        const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
+        const QString status = parseStatus(output, success);
+        m_statusPending.remove(path);
+        m_statusCache.insert(path, status);
+        Q_EMIT statusChanged(directory, status);
+        m_statusProcess = nullptr;
+        process->deleteLater();
+        startNextStatusRequest();
+    });
+
+    process->start(executable, {QStringLiteral("status"), path});
+}
+
 void Fscrypt::setRunning(bool running)
 {
     if (m_running == running)
@@ -188,7 +307,13 @@ bool Fscrypt::startProcess(const QStringList &arguments, const QString &passphra
         const QString error = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
         const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
         const QString processMessage = !error.isEmpty() ? error : (!output.isEmpty() ? output : i18n("fscrypt failed."));
-        const QString message = success ? (output.isEmpty() ? i18n("Directory encrypted.") : output) : formatErrorMessage(processMessage);
+        QString successMessage = i18n("Directory encrypted.");
+        if (m_stage == Stage::Lock)
+            successMessage = i18n("Directory locked.");
+        else if (m_stage == Stage::Unlock)
+            successMessage = i18n("Directory unlocked.");
+
+        const QString message = success ? (output.isEmpty() ? successMessage : output) : formatErrorMessage(processMessage);
 
         finish(process, success, message);
     });
@@ -364,4 +489,65 @@ void Fscrypt::createEncryptedDirectory(const QUrl &parentDirectory,
     }
 
     encryptDirectory(QUrl::fromLocalFile(parent.filePath(name)), protectorName, passphrase);
+}
+
+void Fscrypt::lockDirectory(const QUrl &directory)
+{
+    if (m_process || m_running)
+    {
+        Q_EMIT finished(false, i18n("Another encryption operation is already running."));
+        return;
+    }
+
+    if (!directory.isLocalFile() || !QFileInfo(directory.toLocalFile()).isDir())
+    {
+        Q_EMIT finished(false, i18n("The selected directory is not available locally."));
+        return;
+    }
+
+    const QString environmentError = availabilityMessage(directory);
+    if (!environmentError.isEmpty())
+    {
+        Q_EMIT finished(false, environmentError);
+        return;
+    }
+
+    m_directory = directory;
+    m_stage = Stage::Lock;
+    setRunning(true);
+    startProcess({QStringLiteral("lock"), directory.toLocalFile(), QStringLiteral("--quiet")}, {}, false);
+}
+
+void Fscrypt::unlockDirectory(const QUrl &directory, const QString &passphrase)
+{
+    if (m_process || m_running)
+    {
+        Q_EMIT finished(false, i18n("Another encryption operation is already running."));
+        return;
+    }
+
+    if (!directory.isLocalFile() || !QFileInfo(directory.toLocalFile()).isDir())
+    {
+        Q_EMIT finished(false, i18n("The selected directory is not available locally."));
+        return;
+    }
+
+    const QString environmentError = availabilityMessage(directory);
+    if (!environmentError.isEmpty())
+    {
+        Q_EMIT finished(false, environmentError);
+        return;
+    }
+
+    if (passphrase.isEmpty())
+    {
+        Q_EMIT finished(false, i18n("Passphrase can not be empty."));
+        return;
+    }
+
+    m_directory = directory;
+    m_passphrase = passphrase;
+    m_stage = Stage::Unlock;
+    setRunning(true);
+    startProcess({QStringLiteral("unlock"), directory.toLocalFile(), QStringLiteral("--quiet")}, passphrase, false);
 }

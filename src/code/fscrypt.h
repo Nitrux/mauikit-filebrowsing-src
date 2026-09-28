@@ -4,7 +4,10 @@
 
 #pragma once
 
+#include <QHash>
 #include <QObject>
+#include <QQueue>
+#include <QSet>
 #include <QStringList>
 #include <QUrl>
 
@@ -23,6 +26,9 @@ public:
     bool running() const;
 
     Q_INVOKABLE QString availabilityMessage(const QUrl &directory) const;
+    Q_INVOKABLE QString cachedStatus(const QUrl &directory) const;
+    Q_INVOKABLE void requestStatus(const QUrl &directory);
+    Q_INVOKABLE void invalidateStatus(const QUrl &directory);
 
     Q_INVOKABLE void encryptDirectory(const QUrl &directory,
                                        const QString &protectorName,
@@ -31,10 +37,13 @@ public:
                                               const QString &directoryName,
                                               const QString &protectorName,
                                               const QString &passphrase);
+    Q_INVOKABLE void lockDirectory(const QUrl &directory);
+    Q_INVOKABLE void unlockDirectory(const QUrl &directory, const QString &passphrase);
 
 Q_SIGNALS:
     void runningChanged();
     void finished(bool success, const QString &message);
+    void statusChanged(const QUrl &directory, const QString &status);
 
 private:
     enum class Stage {
@@ -42,9 +51,13 @@ private:
         GlobalSetup,
         MountSetup,
         Encrypt,
+        Lock,
+        Unlock,
     };
 
     bool startProcess(const QStringList &arguments, const QString &passphrase, bool privileged);
+    void startNextStatusRequest();
+    static QString parseStatus(const QString &output, bool success);
     void startSetup();
     void startMountSetup();
     void startEncryption();
@@ -61,4 +74,8 @@ private:
     QString m_mountPoint;
     QString m_protectorName;
     QString m_passphrase;
+    QProcess *m_statusProcess = nullptr;
+    QQueue<QUrl> m_statusQueue;
+    QSet<QString> m_statusPending;
+    QHash<QString, QString> m_statusCache;
 };
