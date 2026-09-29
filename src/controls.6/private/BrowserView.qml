@@ -619,6 +619,15 @@ Maui.AltBrowser
             Layout.preferredWidth: visible ? height : 0
             active: control.delegateInjector
             visible: active
+
+            function syncItemData()
+            {
+                if (item && typeof item.itemData !== "undefined")
+                    item.itemData = itemData
+            }
+
+            onItemDataChanged: syncItemData()
+            onLoaded: syncItemData()
         }
 
         onClicked: function(mouse)
@@ -810,6 +819,15 @@ Maui.AltBrowser
                 sourceComponent: control.delegateInjector
                 anchors.fill: parent
                 active: control.delegateInjector
+
+                function syncItemData()
+                {
+                    if (item && typeof item.itemData !== "undefined")
+                        item.itemData = itemData
+                }
+
+                onItemDataChanged: syncItemData()
+                onLoaded: syncItemData()
             }
 
             onClicked: function(mouse)

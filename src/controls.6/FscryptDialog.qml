@@ -12,6 +12,7 @@ Maui.InfoDialog
 
     property url directory
     property bool createDirectory: false
+    property FB.Fscrypt fscrypt: _defaultFscrypt
 
     Maui.Theme.colorSet: Maui.Theme.View
 
@@ -31,9 +32,11 @@ Maui.InfoDialog
                                        && protectorName.length > 0
                                        && passphrase.length > 0
                                        && passphrase === confirmation
-    readonly property string environmentMessage: _fscrypt.availabilityMessage(control.directory)
+                                       && (!setupRequired || _setupAuthorization.checked)
+    readonly property string environmentMessage: control.fscrypt.availabilityMessage(control.directory)
     readonly property bool environmentBlocked: environmentMessage.length > 0
-    readonly property bool formEnabled: !environmentBlocked && !_fscrypt.running
+    readonly property bool setupRequired: !environmentBlocked && control.fscrypt.requiresSetup(control.directory)
+    readonly property bool formEnabled: !environmentBlocked && !control.fscrypt.running
     property string errorMessage: ""
 
     signal operationCompleted(bool success)
@@ -88,17 +91,23 @@ Maui.InfoDialog
             return
 
         if (createDirectory)
-            _fscrypt.createEncryptedDirectory(control.directory, control.directoryName, control.protectorName, control.passphrase)
+            control.fscrypt.createEncryptedDirectory(control.directory, control.directoryName, control.protectorName, _passphraseField.text, _setupAuthorization.checked)
         else
-            _fscrypt.encryptDirectory(control.directory, control.protectorName, control.passphrase)
+            control.fscrypt.encryptDirectory(control.directory, control.protectorName, _passphraseField.text, _setupAuthorization.checked)
+
+        _passphraseField.clear()
+        _confirmationField.clear()
 
         updateValidation()
     }
 
     onRejected:
     {
-        if (!_fscrypt.running)
-            close()
+        _passphraseField.clear()
+        _confirmationField.clear()
+        if (control.fscrypt.running)
+            control.fscrypt.cancel()
+        close()
     }
 
     Maui.TextField
@@ -166,6 +175,17 @@ Maui.InfoDialog
         }
     }
 
+    CheckBox
+    {
+        id: _setupAuthorization
+        enabled: control.formEnabled
+        visible: control.setupRequired
+        Layout.fillWidth: true
+        Layout.topMargin: Maui.Style.space.small
+        text: i18n("Allow administrator setup and permit all users to create encryption metadata on this filesystem")
+        onToggled: control.updateValidation()
+    }
+
     Maui.Chip
     {
         id: _errorMessage
@@ -174,18 +194,18 @@ Maui.InfoDialog
         visible: control.errorMessage.length > 0
         text: control.errorMessage
         color: Maui.Theme.negativeBackgroundColor
-        label.horizontalAlignment: Text.AlignHCenter
+        label.horizontalAlignment: Text.AlignLeft
         label.wrapMode: Text.Wrap
     }
 
     FB.Fscrypt
     {
-        id: _fscrypt
+        id: _defaultFscrypt
     }
 
     Connections
     {
-        target: _fscrypt
+        target: control.fscrypt
 
         function onRunningChanged()
         {
@@ -256,6 +276,12 @@ Maui.InfoDialog
             return false
         }
 
+        if (setupRequired && !_setupAuthorization.checked)
+        {
+            showError(i18n("Administrator filesystem setup must be approved."))
+            return false
+        }
+
         return true
     }
 
@@ -280,6 +306,6 @@ Maui.InfoDialog
 
         const cancelButton = standardButton(Dialog.Cancel)
         if (cancelButton)
-            cancelButton.enabled = !_fscrypt.running
+            cancelButton.enabled = true
     }
 }

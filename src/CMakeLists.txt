@@ -10,6 +10,16 @@ include_directories(
 
 add_library(MauiKitFileBrowsing${MAUI_MAJOR_VERSION})
 
+add_executable(MauiKitFileBrowsingFscryptPersistenceHelper
+    code/fscryptconfigpersistencehelper.cpp)
+set_target_properties(MauiKitFileBrowsingFscryptPersistenceHelper PROPERTIES
+    OUTPUT_NAME mauikit-filebrowsing-fscrypt-persist)
+target_link_libraries(MauiKitFileBrowsingFscryptPersistenceHelper
+    PRIVATE
+    Qt${QT_MAJOR_VERSION}::Core)
+install(TARGETS MauiKitFileBrowsingFscryptPersistenceHelper
+    RUNTIME DESTINATION ${KDE_INSTALL_LIBEXECDIR})
+
 ecm_add_qml_module(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     VERSION 1.3
     URI "org.mauikit.filebrowsing"
@@ -86,6 +96,8 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
 
     code/fscrypt.cpp
     code/fscrypt.h
+    code/fscryptconfigpersistence.cpp
+    code/fscryptconfigpersistence.h
 
     code/tagging.cpp
     code/tagging.h
@@ -98,6 +110,10 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     code/moduleinfo.cpp
     code/moduleinfo.h
     ${syncing_SRCS})
+
+target_compile_definitions(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
+    PRIVATE
+    FSCRYPT_CONFIG_PERSISTENCE_HELPER_PATH="${KDE_INSTALL_FULL_LIBEXECDIR}/mauikit-filebrowsing-fscrypt-persist")
 
 target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}plugin
     PRIVATE
@@ -198,4 +214,3 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/filebrowsing_export.h
     DESTINATION ${KDE_INSTALL_INCLUDEDIR}/MauiKit${MAUI_MAJOR_VERSION}/FileBrowsing
     COMPONENT Devel)
-

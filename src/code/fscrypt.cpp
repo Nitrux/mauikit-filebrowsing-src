@@ -3,29 +3,113 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include "fscrypt.h"
+#include "fscryptconfigpersistence.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <QDir>
 #include <QFile>
+#include <QFileDevice>
 #include <QFileInfo>
 #include <QIODevice>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStorageInfo>
+#include <QTimer>
 
 #include <KLocalizedString>
 
+#include <sys/stat.h>
+
 namespace
 {
+constexpr qsizetype MaximumStatusCacheEntries = 512;
+constexpr qsizetype MaximumPendingStatusRequests = 256;
+constexpr int OperationTimeout = 120000;
+constexpr int StatusTimeout = 10000;
+
+#ifndef FSCRYPT_CONFIG_PERSISTENCE_HELPER_PATH
+#define FSCRYPT_CONFIG_PERSISTENCE_HELPER_PATH "/usr/libexec/mauikit-filebrowsing-fscrypt-persist"
+#endif
+
+QString trustedSystemExecutable(const QString &executable)
+{
+    const QString path = QStandardPaths::findExecutable(
+        executable,
+        {QStringLiteral("/usr/bin"), QStringLiteral("/bin")});
+    if (path.isEmpty())
+        return {};
+
+    const QFileInfo info(path);
+    const QFileDevice::Permissions unsafePermissions =
+        QFileDevice::WriteGroup | QFileDevice::WriteOther;
+    if (!info.isFile() || !info.isExecutable() || info.ownerId() != 0
+        || (info.permissions() & unsafePermissions))
+    {
+        return {};
+    }
+
+    return info.canonicalFilePath();
+}
+
+QString trustedExecutableAt(const QString &path)
+{
+    const QFileInfo info(path);
+    const QFileDevice::Permissions unsafePermissions =
+        QFileDevice::WriteGroup | QFileDevice::WriteOther;
+    if (!info.isFile() || !info.isExecutable() || info.ownerId() != 0
+        || (info.permissions() & unsafePermissions))
+    {
+        return {};
+    }
+
+    return info.canonicalFilePath();
+}
+
+void wipe(QString &value)
+{
+    value.fill(QChar(u'\0'));
+    value.clear();
+    value.squeeze();
+}
+
+bool directoryIdentity(const QString &path, quint64 &device, quint64 &inode)
+{
+    struct stat information;
+    const QByteArray encodedPath = QFile::encodeName(path);
+    if (::lstat(encodedPath.constData(), &information) != 0 || !S_ISDIR(information.st_mode))
+        return false;
+
+    device = static_cast<quint64>(information.st_dev);
+    inode = static_cast<quint64>(information.st_ino);
+    return true;
+}
+
+bool directoryIsEmpty(const QString &path)
+{
+    return QDir(path).entryList(QDir::NoDotAndDotDot | QDir::AllEntries | QDir::Hidden | QDir::System).isEmpty();
+}
+
 QString formatErrorMessage(QString message)
 {
     message = message.trimmed();
     const QString errorPrefix = QStringLiteral("[ERROR]");
-    if (!message.startsWith(errorPrefix))
-        return message;
+    if (message.startsWith(errorPrefix))
+        message = message.mid(errorPrefix.size()).trimmed();
 
-    message = message.mid(errorPrefix.size()).trimmed();
+    const QString lowerMessage = message.toLower();
+    if (lowerMessage.contains(QStringLiteral("error getting authority"))
+        || lowerMessage.contains(QStringLiteral("error initializing authority")))
+    {
+        return i18n("Administrator authentication is unavailable. Start the PolicyKit authority and try again.");
+    }
+
+    if (lowerMessage.contains(QStringLiteral("directory was incompletely locked"))
+        || lowerMessage.contains(QStringLiteral("some files are still open")))
+    {
+        return i18n("Some files are still open. Close them and try again.");
+    }
     if (message.startsWith(QStringLiteral("fscrypt ")))
     {
         const int separator = message.indexOf(QStringLiteral(": "));
@@ -45,7 +129,18 @@ QString formatErrorMessage(QString message)
 
 Fscrypt::Fscrypt(QObject *parent)
     : QObject(parent)
+    , m_operationTimer(new QTimer(this))
 {
+    m_operationTimer->setSingleShot(true);
+    m_operationTimer->setInterval(OperationTimeout);
+    connect(m_operationTimer, &QTimer::timeout, this, [this]() {
+        if (!m_process)
+            return;
+
+        auto *process = m_process;
+        process->kill();
+        finish(process, false, i18n("The encryption operation timed out."));
+    });
 }
 
 bool Fscrypt::running() const
@@ -70,10 +165,17 @@ QString Fscrypt::availabilityMessage(const QUrl &directory) const
     if (isLiveSession())
         return i18n("Live environments are not supported.");
 
-    if (!directory.isLocalFile() || !QFileInfo(directory.toLocalFile()).isDir())
+    if (!directory.isLocalFile())
         return i18n("The selected directory is not available locally.");
 
-    const QStorageInfo storage(directory.toLocalFile());
+    const QFileInfo directoryInfo(directory.toLocalFile());
+    if (!directoryInfo.isDir() || directoryInfo.isSymLink() || directoryInfo.canonicalFilePath().isEmpty())
+        return i18n("The selected directory is not available locally.");
+
+    if (!directoryInfo.isWritable())
+        return i18n("The selected directory is not writable.");
+
+    const QStorageInfo storage(directoryInfo.canonicalFilePath());
     if (!storage.isValid() || !storage.isReady() || storage.rootPath().isEmpty())
         return i18n("The filesystem containing the directory is not available.");
 
@@ -82,6 +184,28 @@ QString Fscrypt::availabilityMessage(const QUrl &directory) const
         return i18n("This directory is on OverlayFS, which does not support fscrypt. Choose a directory on a persistent, non-overlay filesystem.");
 
     return {};
+}
+
+bool Fscrypt::requiresSetup(const QUrl &directory) const
+{
+    if (!directory.isLocalFile())
+        return false;
+
+    const QFileInfo directoryInfo(directory.toLocalFile());
+    const QString path = directoryInfo.canonicalFilePath();
+    if (!directoryInfo.isDir() || directoryInfo.isSymLink() || path.isEmpty())
+        return false;
+
+    if (!QFileInfo::exists(QStringLiteral("/etc/fscrypt.conf")))
+        return true;
+
+    const QStorageInfo storage(path);
+    if (!storage.isValid() || !storage.isReady() || storage.rootPath().isEmpty())
+        return false;
+
+    const QDir metadataDirectory(QDir(storage.rootPath()).filePath(QStringLiteral(".fscrypt")));
+    return !metadataDirectory.exists(QStringLiteral("policies"))
+           || !metadataDirectory.exists(QStringLiteral("protectors"));
 }
 
 QString Fscrypt::cachedStatus(const QUrl &directory) const
@@ -110,6 +234,14 @@ void Fscrypt::requestStatus(const QUrl &directory)
 
     if (!m_statusPending.contains(path))
     {
+        if (m_statusPending.size() >= MaximumPendingStatusRequests && !m_statusQueue.isEmpty())
+        {
+            const QUrl droppedDirectory = m_statusQueue.dequeue();
+            const QString droppedPath = QDir::cleanPath(droppedDirectory.toLocalFile());
+            m_statusPending.remove(droppedPath);
+            Q_EMIT statusChanged(droppedDirectory, QStringLiteral("unknown"));
+        }
+
         m_statusPending.insert(path);
         m_statusQueue.enqueue(QUrl::fromLocalFile(path));
     }
@@ -127,8 +259,32 @@ void Fscrypt::invalidateStatus(const QUrl &directory)
         return;
 
     m_statusCache.remove(path);
-    Q_EMIT statusChanged(directory, QStringLiteral("unknown"));
+    m_statusCacheOrder.removeAll(path);
     requestStatus(directory);
+}
+
+void Fscrypt::cacheStatus(const QString &path, const QString &status)
+{
+    m_statusCacheOrder.removeAll(path);
+    while (m_statusCache.size() >= MaximumStatusCacheEntries && !m_statusCacheOrder.isEmpty())
+        m_statusCache.remove(m_statusCacheOrder.dequeue());
+
+    m_statusCache.insert(path, status);
+    m_statusCacheOrder.enqueue(path);
+}
+
+void Fscrypt::updateStatus(const QUrl &directory, const QString &status)
+{
+    if (!directory.isLocalFile())
+        return;
+
+    const QString path = QDir::cleanPath(directory.toLocalFile());
+    if (path.isEmpty())
+        return;
+
+    const QUrl normalizedDirectory = QUrl::fromLocalFile(path);
+    cacheStatus(path, status);
+    Q_EMIT statusChanged(normalizedDirectory, status);
 }
 
 QString Fscrypt::parseStatus(const QString &output, bool success)
@@ -158,11 +314,11 @@ void Fscrypt::startNextStatusRequest()
 
     const QUrl directory = m_statusQueue.dequeue();
     const QString path = QDir::cleanPath(directory.toLocalFile());
-    const auto executable = QStandardPaths::findExecutable(QStringLiteral("fscrypt"));
+    const auto executable = trustedSystemExecutable(QStringLiteral("fscrypt"));
     if (executable.isEmpty())
     {
         m_statusPending.remove(path);
-        m_statusCache.insert(path, QStringLiteral("unknown"));
+        cacheStatus(path, QStringLiteral("unknown"));
         Q_EMIT statusChanged(directory, QStringLiteral("unknown"));
         startNextStatusRequest();
         return;
@@ -175,12 +331,7 @@ void Fscrypt::startNextStatusRequest()
         if (error != QProcess::FailedToStart || m_statusProcess != process)
             return;
 
-        m_statusPending.remove(path);
-        m_statusCache.insert(path, QStringLiteral("unknown"));
-        Q_EMIT statusChanged(directory, QStringLiteral("unknown"));
-        m_statusProcess = nullptr;
-        process->deleteLater();
-        startNextStatusRequest();
+        finishStatusRequest(process, directory, path, QStringLiteral("unknown"));
     });
 
     connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this, process, directory, path](int exitCode, QProcess::ExitStatus exitStatus) {
@@ -192,15 +343,30 @@ void Fscrypt::startNextStatusRequest()
                                    + QString::fromLocal8Bit(process->readAllStandardError());
         const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
         const QString status = parseStatus(output, success);
-        m_statusPending.remove(path);
-        m_statusCache.insert(path, status);
-        Q_EMIT statusChanged(directory, status);
-        m_statusProcess = nullptr;
-        process->deleteLater();
-        startNextStatusRequest();
+        finishStatusRequest(process, directory, path, status);
     });
 
     process->start(executable, {QStringLiteral("status"), path});
+    QTimer::singleShot(StatusTimeout, process, [this, process, directory, path]() {
+        if (m_statusProcess != process)
+            return;
+
+        process->kill();
+        finishStatusRequest(process, directory, path, QStringLiteral("unknown"));
+    });
+}
+
+void Fscrypt::finishStatusRequest(QProcess *process, const QUrl &directory, const QString &path, const QString &status)
+{
+    if (m_statusProcess != process)
+        return;
+
+    m_statusPending.remove(path);
+    cacheStatus(path, status);
+    Q_EMIT statusChanged(directory, status);
+    m_statusProcess = nullptr;
+    process->deleteLater();
+    startNextStatusRequest();
 }
 
 void Fscrypt::setRunning(bool running)
@@ -217,7 +383,28 @@ void Fscrypt::clearPendingOperation()
     m_directory = QUrl();
     m_mountPoint.clear();
     m_protectorName.clear();
-    m_passphrase.clear();
+    wipe(m_passphrase);
+    wipe(m_processPassphrase);
+    m_directoryDevice = 0;
+    m_directoryInode = 0;
+    m_setupAuthorized = false;
+    m_cancelRequested = false;
+}
+
+void Fscrypt::cancel()
+{
+    if (!m_process)
+        return;
+
+    if (m_stage == Stage::PersistConfig)
+    {
+        m_cancelRequested = true;
+        return;
+    }
+
+    auto *process = m_process;
+    process->kill();
+    finish(process, false, i18n("The encryption operation was canceled."));
 }
 
 void Fscrypt::fail(const QString &message)
@@ -234,9 +421,28 @@ void Fscrypt::finish(QProcess *process, bool success, const QString &message)
         return;
 
     m_process = nullptr;
+    m_operationTimer->stop();
     process->deleteLater();
 
+    if (m_cancelRequested && m_stage == Stage::PersistConfig)
+    {
+        fail(i18n("The encryption operation was canceled."));
+        return;
+    }
+
     if (success && m_stage == Stage::GlobalSetup)
+    {
+        if (FscryptConfigPersistence::isOverlayrootActive())
+        {
+            startConfigPersistence();
+            return;
+        }
+
+        startMountSetup();
+        return;
+    }
+
+    if (success && m_stage == Stage::PersistConfig)
     {
         startMountSetup();
         return;
@@ -248,24 +454,42 @@ void Fscrypt::finish(QProcess *process, bool success, const QString &message)
         return;
     }
 
+    if (success)
+    {
+        if (m_stage == Stage::Encrypt || m_stage == Stage::Unlock)
+            updateStatus(m_directory, QStringLiteral("encrypted_unlocked"));
+        else if (m_stage == Stage::Lock)
+            updateStatus(m_directory, QStringLiteral("encrypted_locked"));
+    }
+
     m_stage = Stage::None;
     clearPendingOperation();
     setRunning(false);
     Q_EMIT finished(success, message);
 }
 
-bool Fscrypt::startProcess(const QStringList &arguments, const QString &passphrase, bool privileged)
+bool Fscrypt::startProcess(const QStringList &arguments, QString passphrase, bool privileged)
 {
-    if (m_process)
+    const auto executable = trustedSystemExecutable(QStringLiteral("fscrypt"));
+    if (executable.isEmpty())
     {
-        fail(i18n("Another encryption operation is already running."));
+        wipe(passphrase);
+        fail(i18n("A trusted fscrypt executable is not installed."));
         return false;
     }
 
-    const auto executable = QStandardPaths::findExecutable(QStringLiteral("fscrypt"));
-    if (executable.isEmpty())
+    return startTrustedProcess(executable, arguments, std::move(passphrase), privileged);
+}
+
+bool Fscrypt::startTrustedProcess(const QString &executable,
+                                  const QStringList &arguments,
+                                  QString passphrase,
+                                  bool privileged)
+{
+    if (m_process)
     {
-        fail(i18n("fscrypt is not installed."));
+        wipe(passphrase);
+        fail(i18n("Another encryption operation is already running."));
         return false;
     }
 
@@ -273,9 +497,10 @@ bool Fscrypt::startProcess(const QStringList &arguments, const QString &passphra
     QStringList processArguments = arguments;
     if (privileged)
     {
-        const auto pkexec = QStandardPaths::findExecutable(QStringLiteral("pkexec"));
+        const auto pkexec = trustedSystemExecutable(QStringLiteral("pkexec"));
         if (pkexec.isEmpty())
         {
+            wipe(passphrase);
             fail(i18n("PolicyKit is not installed."));
             return false;
         }
@@ -286,19 +511,24 @@ bool Fscrypt::startProcess(const QStringList &arguments, const QString &passphra
 
     auto *process = new QProcess(this);
     m_process = process;
+    m_processPassphrase = std::move(passphrase);
 
     connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart)
             finish(process, false, process->errorString());
     });
 
-    connect(process, &QProcess::started, this, [process, passphrase]() {
-        if (!passphrase.isEmpty())
+    connect(process, &QProcess::started, this, [this, process]() {
+        if (!m_processPassphrase.isEmpty())
         {
-            process->write(passphrase.toUtf8());
+            QByteArray encodedPassphrase = m_processPassphrase.toUtf8();
+            process->write(encodedPassphrase);
             process->write("\n");
+            encodedPassphrase.fill('\0');
+            encodedPassphrase.clear();
         }
 
+        wipe(m_processPassphrase);
         process->closeWriteChannel();
     });
 
@@ -306,9 +536,14 @@ bool Fscrypt::startProcess(const QStringList &arguments, const QString &passphra
         const QString output = QString::fromLocal8Bit(process->readAllStandardOutput()).trimmed();
         const QString error = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
         const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
-        const QString processMessage = !error.isEmpty() ? error : (!output.isEmpty() ? output : i18n("fscrypt failed."));
+        const QString fallbackMessage = m_stage == Stage::PersistConfig
+                                            ? i18n("The fscrypt configuration could not be made persistent.")
+                                            : i18n("fscrypt failed.");
+        const QString processMessage = !error.isEmpty() ? error : (!output.isEmpty() ? output : fallbackMessage);
         QString successMessage = i18n("Directory encrypted.");
-        if (m_stage == Stage::Lock)
+        if (m_stage == Stage::PersistConfig)
+            successMessage = i18n("The fscrypt configuration was made persistent.");
+        else if (m_stage == Stage::Lock)
             successMessage = i18n("Directory locked.");
         else if (m_stage == Stage::Unlock)
             successMessage = i18n("Directory unlocked.");
@@ -319,13 +554,33 @@ bool Fscrypt::startProcess(const QStringList &arguments, const QString &passphra
     });
 
     process->start(program, processArguments);
+    m_operationTimer->start();
     return true;
+}
+
+void Fscrypt::startConfigPersistence()
+{
+    const QString helper = trustedExecutableAt(QString::fromLatin1(FSCRYPT_CONFIG_PERSISTENCE_HELPER_PATH));
+    if (helper.isEmpty())
+    {
+        fail(i18n("The fscrypt configuration persistence helper is not installed correctly."));
+        return;
+    }
+
+    m_stage = Stage::PersistConfig;
+    startTrustedProcess(helper, {}, {}, true);
 }
 
 void Fscrypt::startSetup()
 {
     if (!QFileInfo::exists(QStringLiteral("/etc/fscrypt.conf")))
     {
+        if (!m_setupAuthorized)
+        {
+            fail(i18n("Administrator filesystem setup was not approved."));
+            return;
+        }
+
         m_stage = Stage::GlobalSetup;
         startProcess({QStringLiteral("setup"),
                       QStringLiteral("--quiet"),
@@ -348,6 +603,12 @@ void Fscrypt::startMountSetup()
         return;
     }
 
+    if (!m_setupAuthorized)
+    {
+        fail(i18n("Administrator filesystem setup was not approved."));
+        return;
+    }
+
     m_stage = Stage::MountSetup;
     startProcess({QStringLiteral("setup"),
                   m_mountPoint,
@@ -360,22 +621,56 @@ void Fscrypt::startMountSetup()
 void Fscrypt::startEncryption()
 {
     const QString directoryPath = m_directory.toLocalFile();
+    if (!validatePendingDirectory())
+    {
+        fail(i18n("The selected directory changed before encryption could start."));
+        return;
+    }
+
     const QDir metadataDirectory(QDir(m_mountPoint).filePath(QStringLiteral(".fscrypt")));
-    const bool privileged = !QFileInfo(directoryPath).isWritable()
-                            || !QFileInfo(metadataDirectory.filePath(QStringLiteral("policies"))).isWritable()
-                            || !QFileInfo(metadataDirectory.filePath(QStringLiteral("protectors"))).isWritable();
+    if (!QFileInfo(metadataDirectory.filePath(QStringLiteral("policies"))).isWritable()
+        || !QFileInfo(metadataDirectory.filePath(QStringLiteral("protectors"))).isWritable())
+    {
+        fail(i18n("The fscrypt metadata on this filesystem is not writable by the current user."));
+        return;
+    }
 
     m_stage = Stage::Encrypt;
+    QString passphrase = std::move(m_passphrase);
     startProcess({QStringLiteral("encrypt"),
                   directoryPath,
                   QStringLiteral("--quiet"),
                   QStringLiteral("--source=custom_passphrase"),
                   QStringLiteral("--name=%1").arg(m_protectorName)},
-                 m_passphrase,
-                 privileged);
+                 std::move(passphrase),
+                 false);
+}
+
+bool Fscrypt::validatePendingDirectory() const
+{
+    const QString path = m_directory.toLocalFile();
+    const QFileInfo directoryInfo(path);
+    quint64 device = 0;
+    quint64 inode = 0;
+    return directoryInfo.isDir()
+           && !directoryInfo.isSymLink()
+           && directoryInfo.isWritable()
+           && directoryInfo.canonicalFilePath() == path
+           && directoryIdentity(path, device, inode)
+           && device == m_directoryDevice
+           && inode == m_directoryInode
+           && directoryIsEmpty(path);
 }
 
 void Fscrypt::encryptDirectory(const QUrl &directory, const QString &protectorName, const QString &passphrase)
+{
+    encryptDirectory(directory, protectorName, passphrase, false);
+}
+
+void Fscrypt::encryptDirectory(const QUrl &directory,
+                               const QString &protectorName,
+                               const QString &passphrase,
+                               bool authorizeSetup)
 {
     if (m_process || m_running)
     {
@@ -396,6 +691,12 @@ void Fscrypt::encryptDirectory(const QUrl &directory, const QString &protectorNa
         return;
     }
 
+    if (requiresSetup(directory) && !authorizeSetup)
+    {
+        Q_EMIT finished(false, i18n("Administrator filesystem setup must be approved before encrypting this directory."));
+        return;
+    }
+
     const QString name = protectorName.trimmed();
     if (name.isEmpty())
     {
@@ -409,24 +710,36 @@ void Fscrypt::encryptDirectory(const QUrl &directory, const QString &protectorNa
         return;
     }
 
-    const QDir target(directory.toLocalFile());
-    if (!target.entryList(QDir::NoDotAndDotDot | QDir::AllEntries | QDir::Hidden | QDir::System).isEmpty())
+    const QFileInfo directoryInfo(directory.toLocalFile());
+    const QString directoryPath = directoryInfo.canonicalFilePath();
+    quint64 device = 0;
+    quint64 inode = 0;
+    if (directoryPath.isEmpty() || !directoryIdentity(directoryPath, device, inode))
+    {
+        Q_EMIT finished(false, i18n("The selected directory is not available locally."));
+        return;
+    }
+
+    if (!directoryIsEmpty(directoryPath))
     {
         Q_EMIT finished(false, i18n("The directory must be empty before it can be encrypted."));
         return;
     }
 
-    const QStorageInfo storage(directory.toLocalFile());
+    const QStorageInfo storage(directoryPath);
     if (!storage.isValid() || !storage.isReady() || storage.rootPath().isEmpty())
     {
         Q_EMIT finished(false, i18n("The filesystem containing the directory is not available."));
         return;
     }
 
-    m_directory = directory;
+    m_directory = QUrl::fromLocalFile(directoryPath);
     m_mountPoint = QDir::cleanPath(storage.rootPath());
     m_protectorName = name;
     m_passphrase = passphrase;
+    m_directoryDevice = device;
+    m_directoryInode = inode;
+    m_setupAuthorized = authorizeSetup;
     m_stage = Stage::None;
     setRunning(true);
     startSetup();
@@ -436,6 +749,15 @@ void Fscrypt::createEncryptedDirectory(const QUrl &parentDirectory,
                                        const QString &directoryName,
                                        const QString &protectorName,
                                        const QString &passphrase)
+{
+    createEncryptedDirectory(parentDirectory, directoryName, protectorName, passphrase, false);
+}
+
+void Fscrypt::createEncryptedDirectory(const QUrl &parentDirectory,
+                                       const QString &directoryName,
+                                       const QString &protectorName,
+                                       const QString &passphrase,
+                                       bool authorizeSetup)
 {
     if (m_process || m_running)
     {
@@ -453,6 +775,12 @@ void Fscrypt::createEncryptedDirectory(const QUrl &parentDirectory,
     if (!environmentError.isEmpty())
     {
         Q_EMIT finished(false, environmentError);
+        return;
+    }
+
+    if (requiresSetup(parentDirectory) && !authorizeSetup)
+    {
+        Q_EMIT finished(false, i18n("Administrator filesystem setup must be approved before creating an encrypted directory."));
         return;
     }
 
@@ -475,9 +803,9 @@ void Fscrypt::createEncryptedDirectory(const QUrl &parentDirectory,
         return;
     }
 
-    if (QStandardPaths::findExecutable(QStringLiteral("fscrypt")).isEmpty())
+    if (trustedSystemExecutable(QStringLiteral("fscrypt")).isEmpty())
     {
-        Q_EMIT finished(false, i18n("fscrypt is not installed."));
+        Q_EMIT finished(false, i18n("A trusted fscrypt executable is not installed."));
         return;
     }
 
@@ -488,7 +816,7 @@ void Fscrypt::createEncryptedDirectory(const QUrl &parentDirectory,
         return;
     }
 
-    encryptDirectory(QUrl::fromLocalFile(parent.filePath(name)), protectorName, passphrase);
+    encryptDirectory(QUrl::fromLocalFile(parent.filePath(name)), protectorName, passphrase, authorizeSetup);
 }
 
 void Fscrypt::lockDirectory(const QUrl &directory)
@@ -512,10 +840,10 @@ void Fscrypt::lockDirectory(const QUrl &directory)
         return;
     }
 
-    m_directory = directory;
+    m_directory = QUrl::fromLocalFile(QFileInfo(directory.toLocalFile()).canonicalFilePath());
     m_stage = Stage::Lock;
     setRunning(true);
-    startProcess({QStringLiteral("lock"), directory.toLocalFile(), QStringLiteral("--quiet")}, {}, false);
+    startProcess({QStringLiteral("lock"), m_directory.toLocalFile(), QStringLiteral("--quiet")}, {}, false);
 }
 
 void Fscrypt::unlockDirectory(const QUrl &directory, const QString &passphrase)
@@ -545,9 +873,8 @@ void Fscrypt::unlockDirectory(const QUrl &directory, const QString &passphrase)
         return;
     }
 
-    m_directory = directory;
-    m_passphrase = passphrase;
+    m_directory = QUrl::fromLocalFile(QFileInfo(directory.toLocalFile()).canonicalFilePath());
     m_stage = Stage::Unlock;
     setRunning(true);
-    startProcess({QStringLiteral("unlock"), directory.toLocalFile(), QStringLiteral("--quiet")}, passphrase, false);
+    startProcess({QStringLiteral("unlock"), m_directory.toLocalFile(), QStringLiteral("--quiet")}, QString(passphrase), false);
 }
