@@ -63,6 +63,7 @@ private:
         GlobalSetup,
         PersistConfig,
         MountSetup,
+        CheckStatus,
         Encrypt,
         Lock,
         Unlock,
@@ -81,6 +82,7 @@ private:
     void startConfigPersistence();
     void startMountSetup();
     void startEncryption();
+    void startEncryptionCommand();
     void finish(QProcess *process, bool success, const QString &message);
     void updateStatus(const QUrl &directory, const QString &status);
     void fail(const QString &message);

@@ -7,8 +7,34 @@
 #include <QFile>
 #include <QIODevice>
 
+namespace
+{
+bool hasOverlayrootKernelParameter()
+{
+    QFile cmdline(QStringLiteral("/proc/cmdline"));
+    if (!cmdline.open(QIODevice::ReadOnly | QIODevice::Text))
+        return false;
+
+    const QList<QByteArray> arguments = cmdline.readAll().simplified().split(' ');
+    for (const auto &argument : arguments)
+    {
+        if (argument == QByteArrayLiteral("overlayroot")
+            || (argument.startsWith(QByteArrayLiteral("overlayroot="))
+                && argument != QByteArrayLiteral("overlayroot=disabled")))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+}
+
 bool FscryptConfigPersistence::isOverlayrootActive()
 {
+    if (hasOverlayrootKernelParameter())
+        return true;
+
     QFile mounts(QStringLiteral("/proc/mounts"));
     if (!mounts.open(QIODevice::ReadOnly | QIODevice::Text))
         return false;

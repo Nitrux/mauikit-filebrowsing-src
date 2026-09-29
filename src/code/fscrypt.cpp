@@ -110,6 +110,13 @@ QString formatErrorMessage(QString message)
     {
         return i18n("Some files are still open. Close them and try again.");
     }
+    if (lowerMessage.contains(QStringLiteral("already encrypted")))
+        return i18n("The selected directory is already encrypted.");
+    if (lowerMessage.contains(QStringLiteral("/etc/fscrypt.conf"))
+        && lowerMessage.contains(QStringLiteral("doesn't exist")))
+    {
+        return i18n("The fscrypt configuration is missing. Allow administrator setup and try again.");
+    }
     if (message.startsWith(QStringLiteral("fscrypt ")))
     {
         const int separator = message.indexOf(QStringLiteral(": "));
@@ -195,6 +202,9 @@ bool Fscrypt::requiresSetup(const QUrl &directory) const
     const QString path = directoryInfo.canonicalFilePath();
     if (!directoryInfo.isDir() || directoryInfo.isSymLink() || path.isEmpty())
         return false;
+
+    if (FscryptConfigPersistence::isOverlayrootActive())
+        return true;
 
     if (!QFileInfo::exists(QStringLiteral("/etc/fscrypt.conf")))
         return true;
@@ -454,6 +464,23 @@ void Fscrypt::finish(QProcess *process, bool success, const QString &message)
         return;
     }
 
+    if (success && m_stage == Stage::CheckStatus)
+    {
+        const QString status = parseStatus(message, true);
+        if (status.startsWith(QStringLiteral("encrypted")))
+        {
+            updateStatus(m_directory, status);
+            m_stage = Stage::None;
+            clearPendingOperation();
+            setRunning(false);
+            Q_EMIT finished(false, i18n("The selected directory is already encrypted."));
+            return;
+        }
+
+        startEncryptionCommand();
+        return;
+    }
+
     if (success)
     {
         if (m_stage == Stage::Encrypt || m_stage == Stage::Unlock)
@@ -547,6 +574,8 @@ bool Fscrypt::startTrustedProcess(const QString &executable,
             successMessage = i18n("Directory locked.");
         else if (m_stage == Stage::Unlock)
             successMessage = i18n("Directory unlocked.");
+        else if (m_stage == Stage::CheckStatus)
+            successMessage = i18n("The directory status could not be determined.");
 
         const QString message = success ? (output.isEmpty() ? successMessage : output) : formatErrorMessage(processMessage);
 
@@ -573,6 +602,30 @@ void Fscrypt::startConfigPersistence()
 
 void Fscrypt::startSetup()
 {
+    if (FscryptConfigPersistence::isOverlayrootActive())
+    {
+        if (!m_setupAuthorized)
+        {
+            fail(i18n("Administrator filesystem setup must be approved."));
+            return;
+        }
+
+        if (!QFileInfo::exists(QStringLiteral("/etc/fscrypt.conf")))
+        {
+            m_stage = Stage::GlobalSetup;
+            startProcess({QStringLiteral("setup"),
+                          QStringLiteral("--quiet"),
+                          QStringLiteral("--force"),
+                          QStringLiteral("--all-users")},
+                         {},
+                         true);
+            return;
+        }
+
+        startConfigPersistence();
+        return;
+    }
+
     if (!QFileInfo::exists(QStringLiteral("/etc/fscrypt.conf")))
     {
         if (!m_setupAuthorized)
@@ -627,6 +680,12 @@ void Fscrypt::startEncryption()
         return;
     }
 
+    m_stage = Stage::CheckStatus;
+    startProcess({QStringLiteral("status"), directoryPath}, {}, false);
+}
+
+void Fscrypt::startEncryptionCommand()
+{
     const QDir metadataDirectory(QDir(m_mountPoint).filePath(QStringLiteral(".fscrypt")));
     if (!QFileInfo(metadataDirectory.filePath(QStringLiteral("policies"))).isWritable()
         || !QFileInfo(metadataDirectory.filePath(QStringLiteral("protectors"))).isWritable())
@@ -638,7 +697,7 @@ void Fscrypt::startEncryption()
     m_stage = Stage::Encrypt;
     QString passphrase = std::move(m_passphrase);
     startProcess({QStringLiteral("encrypt"),
-                  directoryPath,
+                  m_directory.toLocalFile(),
                   QStringLiteral("--quiet"),
                   QStringLiteral("--source=custom_passphrase"),
                   QStringLiteral("--name=%1").arg(m_protectorName)},

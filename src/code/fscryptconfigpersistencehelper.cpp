@@ -18,6 +18,7 @@ namespace
 constexpr auto ConfigPath = "/etc/fscrypt.conf";
 constexpr auto OverlayrootChrootPath = "/usr/sbin/overlayroot-chroot";
 constexpr auto InstallPath = "/usr/bin/install";
+constexpr auto TestPath = "/usr/bin/test";
 constexpr qint64 MaximumConfigSize = 1024 * 1024;
 constexpr int ProcessStartTimeout = 5000;
 constexpr int ProcessFinishTimeout = 30000;
@@ -91,7 +92,8 @@ int main(int argc, char *argv[])
 
     const QString overlayrootChroot = trustedExecutable(QString::fromLatin1(OverlayrootChrootPath));
     const QString install = trustedExecutable(QString::fromLatin1(InstallPath));
-    if (overlayrootChroot.isEmpty() || install.isEmpty())
+    const QString test = trustedExecutable(QString::fromLatin1(TestPath));
+    if (overlayrootChroot.isEmpty() || install.isEmpty() || test.isEmpty())
         return fail(QStringLiteral("NX Overlayroot tools are not installed correctly."));
 
     QProcess process;
@@ -101,7 +103,6 @@ int main(int argc, char *argv[])
                           QStringLiteral("-o"), QStringLiteral("0"),
                           QStringLiteral("-g"), QStringLiteral("0"),
                           QStringLiteral("-m"), QStringLiteral("0644"),
-                          QStringLiteral("--"),
                           stagingFile.fileName(),
                           QString::fromLatin1(ConfigPath)});
     process.start();
@@ -131,6 +132,18 @@ int main(int argc, char *argv[])
 
     if (!standardOutput.isEmpty())
         std::fprintf(stdout, "%s\n", qPrintable(standardOutput));
+
+    QProcess verification;
+    verification.setProgram(overlayrootChroot);
+    verification.setArguments({test, QStringLiteral("-s"), QString::fromLatin1(ConfigPath)});
+    verification.start();
+    if (!verification.waitForStarted(ProcessStartTimeout)
+        || !verification.waitForFinished(ProcessFinishTimeout)
+        || verification.exitStatus() != QProcess::NormalExit
+        || verification.exitCode() != 0)
+    {
+        return fail(QStringLiteral("The fscrypt configuration was not found in the persistent filesystem."));
+    }
 
     return 0;
 }
