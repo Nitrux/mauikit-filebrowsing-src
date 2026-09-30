@@ -21,7 +21,6 @@
 #include "placeslist.h"
 #include "fmlist.h"
 #include "openwithmodel.h"
-#include "fscrypt.h"
 
 QUrl FileBrowsingPlugin::componentUrl(const QString &fileName) const
 {
@@ -49,7 +48,6 @@ void FileBrowsingPlugin::registerTypes(const char *uri)
     qmlRegisterType(componentUrl(QStringLiteral("FileListingDialog.qml")), uri, 1, 0, "FileListingDialog");
 
     qmlRegisterType<OpenWithModel>(uri, 1, 3, "OpenWithModel");
-    qmlRegisterType<Fscrypt>(uri, 1, 3, "Fscrypt");
     qmlRegisterType(componentUrl(QStringLiteral("OpenWithDialog.qml")), uri, 1, 0, "OpenWithDialog");
     
     qmlRegisterSingletonType<FMStatic>(uri, 1, 0, "FM", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
@@ -65,7 +63,6 @@ void FileBrowsingPlugin::registerTypes(const char *uri)
     });
 
     qmlRegisterType(componentUrl(QStringLiteral("FileOperationDialog.qml")), uri, 1, 0, "FileOperationDialog");
-    qmlRegisterType(componentUrl(QStringLiteral("FscryptDialog.qml")), uri, 1, 0, "FscryptDialog");
     
     //File Tagging components
     qmlRegisterSingletonType<Tagging>(uri, 1, 3, "Tagging", &Tagging::qmlInstance);

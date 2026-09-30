@@ -10,16 +10,6 @@ include_directories(
 
 add_library(MauiKitFileBrowsing${MAUI_MAJOR_VERSION})
 
-add_executable(MauiKitFileBrowsingFscryptPersistenceHelper
-    code/fscryptconfigpersistencehelper.cpp)
-set_target_properties(MauiKitFileBrowsingFscryptPersistenceHelper PROPERTIES
-    OUTPUT_NAME mauikit-filebrowsing-fscrypt-persist)
-target_link_libraries(MauiKitFileBrowsingFscryptPersistenceHelper
-    PRIVATE
-    Qt${QT_MAJOR_VERSION}::Core)
-install(TARGETS MauiKitFileBrowsingFscryptPersistenceHelper
-    RUNTIME DESTINATION ${KDE_INSTALL_LIBEXECDIR})
-
 ecm_add_qml_module(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     VERSION 1.3
     URI "org.mauikit.filebrowsing"
@@ -44,7 +34,6 @@ set(headers
     code/placeslist.h
     code/downloader.h
     code/fileloader.h
-    code/fscrypt.h
     code/tagging.h
     code/tagdb.h
     code/moduleinfo.h)
@@ -94,11 +83,6 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     code/fileloader.cpp
     code/fileloader.h
 
-    code/fscrypt.cpp
-    code/fscrypt.h
-    code/fscryptconfigpersistence.cpp
-    code/fscryptconfigpersistence.h
-
     code/tagging.cpp
     code/tagging.h
 
@@ -110,10 +94,6 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
     code/moduleinfo.cpp
     code/moduleinfo.h
     ${syncing_SRCS})
-
-target_compile_definitions(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}
-    PRIVATE
-    FSCRYPT_CONFIG_PERSISTENCE_HELPER_PATH="${KDE_INSTALL_FULL_LIBEXECDIR}/mauikit-filebrowsing-fscrypt-persist")
 
 target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}plugin
     PRIVATE
@@ -128,7 +108,6 @@ target_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION}plugin
 
     code/openwithmodel.cpp
     code/openwithmodel.h
-    code/fscrypt.h
     ${filebrowsing_QML_QRC})
 
 ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} SOURCES
@@ -139,7 +118,6 @@ ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} SOURCES
     controls.${QT_MAJOR_VERSION}/FileDialog.qml
     controls.${QT_MAJOR_VERSION}/FileListingDialog.qml
     controls.${QT_MAJOR_VERSION}/FileOperationDialog.qml
-    controls.${QT_MAJOR_VERSION}/FscryptDialog.qml
     controls.${QT_MAJOR_VERSION}/NewTagDialog.qml
     controls.${QT_MAJOR_VERSION}/PlacesListBrowser.qml
     controls.${QT_MAJOR_VERSION}/TagsDialog.qml
