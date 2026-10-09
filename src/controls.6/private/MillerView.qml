@@ -364,6 +364,8 @@ Item
 
                     onClicked:
                     {
+                        control.forceActiveFocus()
+
                         if (control.isDirectory(model))
                             control.navigateTo(String(model.path))
                         else
@@ -457,6 +459,7 @@ Item
                     onClicked: (mouse) =>
                     {
                         _currentColumn.currentIndex = index
+                        control.forceActiveFocus()
 
                         if (mouse.button === Qt.LeftButton && control.selectionMode && !control.isDirectory(model))
                             control.itemsSelected([index])
@@ -465,6 +468,7 @@ Item
                     onDoubleClicked:
                     {
                         _currentColumn.currentIndex = index
+                        control.forceActiveFocus()
                         if (control.isDirectory(model))
                             control.navigateTo(String(model.path))
                         else
@@ -474,6 +478,7 @@ Item
                     onRightClicked:
                     {
                         _currentColumn.currentIndex = index
+                        control.forceActiveFocus()
                         control.itemRightClicked(index)
                     }
 
@@ -539,7 +544,6 @@ Item
                 {
                     width: ListView.view.width
                     flat: true
-                    mouseArea.enabled: false
                     iconSource: control.iconFor(model)
                     imageSource: control.imageFor(model)
                     iconSizeHint: Maui.Style.mapToIconSizes(control.listItemSize)
@@ -547,6 +551,28 @@ Item
                     label2.text: control.label2For(model)
                     label3.text: model.modified ? Maui.Handy.formatDate(model.modified, "MM/dd/yyyy") : ""
                     tooltipText: model.path
+
+                    onClicked:
+                    {
+                        _previewColumn.currentIndex = index
+                        control.forceActiveFocus()
+
+                        if (control.isDirectory(model))
+                            control.navigateTo(String(model.path))
+                        else
+                            control.fileRequested(String(model.path))
+                    }
+
+                    onDoubleClicked:
+                    {
+                        _previewColumn.currentIndex = index
+                        control.forceActiveFocus()
+
+                        if (control.isDirectory(model))
+                            control.navigateTo(String(model.path))
+                        else
+                            control.fileRequested(String(model.path))
+                    }
                 }
             }
 
@@ -596,6 +622,20 @@ Item
     Keys.enabled: true
     Keys.onPressed: (event) =>
     {
+        if (event.key === Qt.Key_Up)
+        {
+            _currentColumn.flickable.decrementCurrentIndex()
+            event.accepted = true
+            return
+        }
+
+        if (event.key === Qt.Key_Down)
+        {
+            _currentColumn.flickable.incrementCurrentIndex()
+            event.accepted = true
+            return
+        }
+
         if (event.key === Qt.Key_Left)
         {
             if (control.parentPath.length > 0 && control.parentPath !== control.currentPath)

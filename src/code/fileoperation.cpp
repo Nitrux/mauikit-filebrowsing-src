@@ -36,7 +36,14 @@ bool FileOperation::startCopy(const QList<QUrl> &urls, const QUrl &destination, 
     auto operation = FileOperation::instance();
 
     if (operation->running())
+    {
+#ifdef KIO_AVAILABLE
+        operation->m_copyQueue.append(CopyRequest{urls, destination, operationName});
+        return true;
+#else
         return false;
+#endif
+    }
 
 #ifdef KIO_AVAILABLE
     auto job = KIO::copy(urls, destination, KIO::HideProgressInfo);
@@ -69,14 +76,7 @@ bool FileOperation::startCopy(const QList<QUrl> &urls, const QUrl &destination, 
     QObject::connect(job, SIGNAL(speed(KJob*, unsigned long)), operation, SLOT(onSpeed(KJob*, unsigned long)));
 
     QObject::connect(job, &KJob::result, operation, [operation](KJob *finishedJob) {
-        const bool success = !operation->m_cancelled && finishedJob->error() == 0;
-        const QString errorMessage = success ? QString() : finishedJob->errorString();
-
-        operation->m_job = nullptr;
-        operation->setProgress(success ? 100 : operation->m_progress);
-        operation->setRunning(false);
-        Q_EMIT operation->finished(success, errorMessage);
-        operation->reset();
+        operation->finishJob(finishedJob);
     });
 
     job->start();
@@ -131,14 +131,7 @@ bool FileOperation::startMove(const QList<QUrl> &urls, const QUrl &destination, 
     QObject::connect(job, SIGNAL(speed(KJob*, unsigned long)), operation, SLOT(onSpeed(KJob*, unsigned long)));
 
     QObject::connect(job, &KJob::result, operation, [operation](KJob *finishedJob) {
-        const bool success = !operation->m_cancelled && finishedJob->error() == 0;
-        const QString errorMessage = success ? QString() : finishedJob->errorString();
-
-        operation->m_job = nullptr;
-        operation->setProgress(success ? 100 : operation->m_progress);
-        operation->setRunning(false);
-        Q_EMIT operation->finished(success, errorMessage);
-        operation->reset();
+        operation->finishJob(finishedJob);
     });
 
     job->start();
@@ -187,14 +180,7 @@ bool FileOperation::startDelete(const QList<QUrl> &urls)
     QObject::connect(job, SIGNAL(speed(KJob*, unsigned long)), operation, SLOT(onSpeed(KJob*, unsigned long)));
 
     QObject::connect(job, &KJob::result, operation, [operation](KJob *finishedJob) {
-        const bool success = !operation->m_cancelled && finishedJob->error() == 0;
-        const QString errorMessage = success ? QString() : finishedJob->errorString();
-
-        operation->m_job = nullptr;
-        operation->setProgress(success ? 100 : operation->m_progress);
-        operation->setRunning(false);
-        Q_EMIT operation->finished(success, errorMessage);
-        operation->reset();
+        operation->finishJob(finishedJob);
     });
 
     job->start();
@@ -205,6 +191,32 @@ bool FileOperation::startDelete(const QList<QUrl> &urls)
     return false;
 #endif
 }
+
+#ifdef KIO_AVAILABLE
+void FileOperation::finishJob(KJob *finishedJob)
+{
+    const bool success = !m_cancelled && finishedJob->error() == 0;
+    const QString errorMessage = success ? QString() : finishedJob->errorString();
+
+    m_job = nullptr;
+    setProgress(success ? 100 : m_progress);
+    setRunning(false);
+    Q_EMIT finished(success, errorMessage);
+    reset();
+
+    startNextCopy();
+}
+
+void FileOperation::startNextCopy()
+{
+    if (running() || m_copyQueue.isEmpty())
+        return;
+
+    const CopyRequest request = m_copyQueue.takeFirst();
+    if (!FileOperation::startCopy(request.urls, request.destination, request.operation))
+        startNextCopy();
+}
+#endif
 
 bool FileOperation::running() const
 {

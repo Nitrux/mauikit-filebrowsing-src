@@ -14,8 +14,9 @@ class KJob;
 /**
  *  Tracks one asynchronous copy, move, or delete operation.
  *
- * FileOperation is a process-wide singleton. Starting an operation fails when
- * another operation is running, when its arguments are empty, or when KIO is
+ * FileOperation is a process-wide singleton. Copy requests received while another
+ * operation is running are queued and started in order. Other operations fail when
+ * another operation is running, when their arguments are empty, or when KIO is
  * unavailable. Progress is reported as a percentage, byte counts, and bytes per
  * second; cancel() requests termination of the active job.
  */
@@ -79,6 +80,11 @@ Q_SIGNALS:
     void destinationChanged();
 
 private:
+#ifdef KIO_AVAILABLE
+    void startNextCopy();
+    void finishJob(KJob *job);
+#endif
+
     void setRunning(bool running);
     void setProgress(int progress);
     void setProcessedBytes(qulonglong bytes);
@@ -98,6 +104,14 @@ private:
     QString m_destination;
 
 #ifdef KIO_AVAILABLE
+    struct CopyRequest
+    {
+        QList<QUrl> urls;
+        QUrl destination;
+        QString operation;
+    };
+
+    QList<CopyRequest> m_copyQueue;
     KJob *m_job = nullptr;
 #endif
 };
