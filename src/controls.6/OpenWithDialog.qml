@@ -72,7 +72,12 @@ Maui.PopupPage
     persistent: false
     
     page.title: i18nd("mauikitfilebrowsing", "Open with")
-    headBar.visible: false
+    header: Maui.DialogHeader
+    {
+        width: parent ? parent.width : implicitWidth
+        title: control.title
+        onCloseRequested: control.close()
+    }
     actions: Action
     {
         Maui.Controls.status: Maui.Controls.Negative

@@ -553,7 +553,7 @@ Maui.Page
 
             property double freedSpace : calculateFreedSpace(urls)
 
-            title:  i18nd("mauikitfilebrowsing", "Removing %1 files", urls.length)
+            title: i18nd("mauikitfilebrowsing", "Delete")
             message: i18nd("mauikitfilebrowsing", "Delete %1  \nTotal freed space %2", (Maui.Handy.isLinux ? "or move to trash?" : "? This action can not be undone."),  Maui.Handy.formatSize(freedSpace))
             onClosed:
             {

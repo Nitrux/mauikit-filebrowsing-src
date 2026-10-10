@@ -68,7 +68,7 @@ import org.mauikit.filebrowsing as FB
  *    @endcode
  * 
  *    @section notes Notes
- *    The title will not be visible by default as the `headBar` is hidden. To force show it use the `headBar.visible` property.
+ *    The title is displayed in the compact dialog header by default.
  * 
  *    <a href="https://invent.kde.org/maui/mauikit/-/blob/qt6-2/examples/FileListingDialog.qml">You can find a more complete example at this link.</a>
  */
@@ -107,7 +107,12 @@ Maui.PopupPage
         hint: 1
         maxWidth: 350
         
-        headBar.visible: false
+        header: Maui.DialogHeader
+        {
+            width: parent ? parent.width : implicitWidth
+            title: control.title
+            onCloseRequested: control.close()
+        }
         
         Maui.ListItemTemplate
         {

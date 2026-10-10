@@ -78,7 +78,6 @@ public:
     Q_INVOKABLE bool pauseOperation(int id);
     Q_INVOKABLE bool resume();
     Q_INVOKABLE bool resumeOperation(int id);
-    Q_INVOKABLE bool moveOperation(int id, int direction);
     Q_INVOKABLE bool moveOperationTo(int id, int targetId);
     Q_INVOKABLE void resolveConflict(int id, bool replace);
 

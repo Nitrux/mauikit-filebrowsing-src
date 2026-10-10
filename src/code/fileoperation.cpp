@@ -73,7 +73,6 @@ struct FileOperation::Operation
     bool pauseSupported = false;
     bool conflictPending = false;
     bool overwriteExisting = false;
-    QUrl conflictSource;
     QUrl conflictDestination;
     int progress = 0;
     qulonglong processedBytes = 0;
@@ -245,7 +244,7 @@ void FileOperation::startPendingOperations()
 bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
 {
 #ifdef KIO_AVAILABLE
-    if (operation->kind == QStringLiteral("copy") || operation->kind == QStringLiteral("paste"))
+    if (operation->kind == QStringLiteral("copy"))
     {
         if (startLocalCopy(operation))
             return true;
@@ -339,9 +338,8 @@ bool FileOperation::startLocalCopy(Operation *operation)
             localDirectories.append(path);
     };
 
-    const auto requestConflict = [operation](const QUrl &source, const QString &destination) {
+    const auto requestConflict = [operation](const QString &destination) {
         operation->conflictPending = true;
-        operation->conflictSource = source;
         operation->conflictDestination = QUrl::fromLocalFile(destination);
     };
 
@@ -387,7 +385,7 @@ bool FileOperation::startLocalCopy(Operation *operation)
                     return false;
                 if (destinationInfo.exists() && !temporaryExists && !operation->overwriteExisting)
                 {
-                    requestConflict(QUrl::fromLocalFile(info.filePath()), destinationPath);
+                    requestConflict(destinationPath);
                     return false;
                 }
 
@@ -406,7 +404,7 @@ bool FileOperation::startLocalCopy(Operation *operation)
             return false;
         if (destinationRootInfo.exists() && !temporaryExists && !operation->overwriteExisting)
         {
-            requestConflict(url, destinationRoot);
+            requestConflict(destinationRoot);
             return false;
         }
 
@@ -837,18 +835,12 @@ QVariantMap FileOperation::operationMap(const Operation *operation) const
     result.insert(QStringLiteral("paused"), operation->paused);
     result.insert(QStringLiteral("pauseSupported"), operation->pauseSupported);
     result.insert(QStringLiteral("conflictPending"), operation->conflictPending);
-    result.insert(QStringLiteral("conflictSource"), operation->conflictSource.isEmpty() ? QString() : displayUrl(operation->conflictSource));
     result.insert(QStringLiteral("conflictDestination"), operation->conflictDestination.isEmpty() ? QString() : displayUrl(operation->conflictDestination));
     result.insert(QStringLiteral("error"), operation->errorMessage);
     const bool canMove = !operation->started && !operation->finished;
-    const int operationIndex = m_operations.indexOf(const_cast<Operation *>(operation));
-    const bool canMoveUp = canMove && operationIndex > 0 && !m_operations.at(operationIndex - 1)->started && !m_operations.at(operationIndex - 1)->finished;
-    const bool canMoveDown = canMove && operationIndex >= 0 && operationIndex + 1 < m_operations.size() && !m_operations.at(operationIndex + 1)->started && !m_operations.at(operationIndex + 1)->finished;
     result.insert(QStringLiteral("canCancel"), operation->active || canMove);
     result.insert(QStringLiteral("canClear"), !operation->active);
     result.insert(QStringLiteral("canMove"), canMove);
-    result.insert(QStringLiteral("canMoveUp"), canMoveUp);
-    result.insert(QStringLiteral("canMoveDown"), canMoveDown);
     return result;
 }
 
@@ -1093,30 +1085,6 @@ bool FileOperation::resumeOperation(int id)
     return false;
 }
 
-bool FileOperation::moveOperation(int id, int direction)
-{
-    if (direction == 0)
-        return false;
-
-    Operation *operation = findOperation(id);
-    if (!operation || operation->started || operation->finished)
-        return false;
-
-    const int index = m_operations.indexOf(operation);
-    const int targetIndex = index + (direction < 0 ? -1 : 1);
-    if (index < 0 || targetIndex < 0 || targetIndex >= m_operations.size())
-        return false;
-
-    Operation *target = m_operations.at(targetIndex);
-    if (target->started || target->finished)
-        return false;
-
-    m_operations.swapItemsAt(index, targetIndex);
-    notifyOperationsChanged();
-    return true;
-}
-
-
 bool FileOperation::moveOperationTo(int id, int targetId)
 {
     if (id == targetId)
@@ -1151,7 +1119,6 @@ void FileOperation::resolveConflict(int id, bool replace)
 
     operation->overwriteExisting = true;
     operation->conflictPending = false;
-    operation->conflictSource.clear();
     operation->conflictDestination.clear();
     notifyOperationsChanged();
     startPendingOperations();

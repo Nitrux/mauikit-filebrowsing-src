@@ -16,11 +16,6 @@ Maui.PopupPage
 {
     id: control
 
-    property int itemCount: 0
-    property bool dismissOnCancel: false
-    property string operationName: ""
-    property string destinationName: ""
-    property string errorMessage: ""
     property Item anchorItem: null
     property int anchorMargin: Maui.Style.space.medium
     property int dialogItemThreshold: 2
@@ -145,7 +140,6 @@ Maui.PopupPage
             return
 
         conflictDialog.operationId = conflict.id
-        conflictDialog.conflictSource = conflict.conflictSource
         conflictDialog.conflictDestination = conflict.conflictDestination
         if (!control.visible)
             control.open()
@@ -670,68 +664,12 @@ Maui.PopupPage
     {
         id: conflictDialog
         property int operationId: -1
-        property string conflictSource: ""
         property string conflictDestination: ""
 
-        title: ""
-        implicitWidth: Maui.Style.units.gridUnit * 28
-        spacing: Maui.Style.space.small
+        title: i18nd("mauikitfilebrowsing", "Replace")
         message: i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.\n\nReplace it with the file you’re copying?", control.conflictItemName(conflictDestination))
         template.iconSource: "dialog-warning"
-        template.iconSizeHint: 64
-        template.imageSizeHint: 64
-        template.spacing: Maui.Style.space.medium
-        template.label2.color: Maui.Theme.textColor
-        template.label2.opacity: 1
         standardButtons: Dialog.Cancel | Dialog.Ok
-
-        header: Maui.ShadowedRectangle
-        {
-            width: parent ? parent.width : implicitWidth
-            implicitHeight: 28
-            height: 28
-            color: Maui.Theme.alternateBackgroundColor
-            clip: true
-
-            corners
-            {
-                topLeftRadius: Maui.Style.radiusV
-                topRightRadius: Maui.Style.radiusV
-                bottomLeftRadius: 0
-                bottomRightRadius: 0
-            }
-
-            Label
-            {
-                anchors.centerIn: parent
-                text: i18nd("mauikitfilebrowsing", "Replace")
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-            }
-
-            Maui.CloseButton
-            {
-                anchors.right: parent.right
-                anchors.rightMargin: Maui.Style.space.small
-                anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: 18
-                implicitHeight: 18
-                width: 18
-                height: 18
-                padding: 0
-                icon.width: 18
-                icon.height: 18
-                onClicked: conflictDialog.reject()
-            }
-
-            Maui.Separator
-            {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                weight: Maui.Separator.Weight.Light
-            }
-        }
 
         onOpened:
         {
@@ -763,19 +701,6 @@ Maui.PopupPage
     {
         target: FB.FileOperation
 
-        function onStarted(operation, itemCount, destination)
-        {
-            control.dismissOnCancel = false
-            control.operationName = operation
-            control.itemCount = itemCount
-            control.destinationName = destination
-            control.errorMessage = ""
-            if (!control.visible)
-                control.scheduleDialogOpen()
-            else
-                control.positionNextToAnchor()
-        }
-
         function onOperationAdded()
         {
             control.scheduleDialogOpen()
@@ -804,15 +729,11 @@ Maui.PopupPage
                 Qt.callLater(control.positionNextToAnchor)
         }
 
-        function onFinished(success, errorMessage)
+        function onFinished(success)
         {
-            if (!success && errorMessage.length > 0)
-                control.errorMessage = errorMessage
-
             if (FB.FileOperation.operationCount === 0)
             {
                 dialogOpenTimer.stop()
-                control.errorMessage = ""
                 control.close()
             }
             else if (!control.visible && (!success || control.dialogShouldOpenImmediately()))
