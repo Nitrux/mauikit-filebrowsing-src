@@ -4,11 +4,17 @@
 #include <QUrl>
 #include <QList>
 #include <QString>
+#include <QVariantList>
+#ifdef KIO_AVAILABLE
+#include <QElapsedTimer>
+#include <QFile>
+#endif
 
 #include "filebrowsing_export.h"
 
 #ifdef KIO_AVAILABLE
 class KJob;
+class QTimer;
 #endif
 
 /**
@@ -38,6 +44,16 @@ class FILEBROWSING_EXPORT FileOperation : public QObject
     Q_PROPERTY(QString operation READ operation NOTIFY operationChanged)
     /** Display form of the destination, empty for deletion. */
     Q_PROPERTY(QString destination READ destination NOTIFY destinationChanged)
+    /** Display name of the active source when one item is being transferred. */
+    Q_PROPERTY(QString sourceName READ sourceName NOTIFY sourceNameChanged)
+    /** Whether the active job is suspended. */
+    Q_PROPERTY(bool paused READ paused NOTIFY pausedChanged)
+    /** Whether the active operation can be paused by this component. */
+    Q_PROPERTY(bool pauseSupported READ pauseSupported NOTIFY pauseSupportedChanged)
+    /** Number of copy requests waiting behind the active job. */
+    Q_PROPERTY(int queuedCount READ queuedCount NOTIFY queueChanged)
+    /** Copy requests waiting behind the active job. */
+    Q_PROPERTY(QVariantList queuedOperations READ queuedOperations NOTIFY queueChanged)
 
 public:
     explicit FileOperation(QObject *parent = nullptr);
@@ -55,9 +71,22 @@ public:
     qulonglong speed() const;
     QString operation() const;
     QString destination() const;
+    QString sourceName() const;
+    bool paused() const;
+    bool pauseSupported() const;
+    int queuedCount() const;
+    QVariantList queuedOperations() const;
 
     /** Cancels the active operation; does nothing when no job is running. */
     Q_INVOKABLE void cancel();
+    /** Cancels one queued copy request by its current queue index. */
+    Q_INVOKABLE void cancelQueued(int index);
+    /** Cancels the active job and discards all queued copy requests. */
+    Q_INVOKABLE void cancelAll();
+    /** Suspends the active job when the backend supports it. */
+    Q_INVOKABLE bool pause();
+    /** Resumes the active job when it is suspended. */
+    Q_INVOKABLE bool resume();
 
 #ifdef KIO_AVAILABLE
 private Q_SLOTS:
@@ -78,11 +107,18 @@ Q_SIGNALS:
     void speedChanged();
     void operationChanged();
     void destinationChanged();
+    void sourceNameChanged();
+    void pausedChanged();
+    void pauseSupportedChanged();
+    void queueChanged();
 
 private:
 #ifdef KIO_AVAILABLE
     void startNextCopy();
     void finishJob(KJob *job);
+    bool startLocalCopy(const QUrl &source, const QUrl &destination, const QString &operation);
+    void processLocalCopy();
+    void finishLocalCopy(bool success, const QString &errorMessage);
 #endif
 
     void setRunning(bool running);
@@ -90,6 +126,8 @@ private:
     void setProcessedBytes(qulonglong bytes);
     void setTotalBytes(qulonglong bytes);
     void setSpeed(qulonglong bytesPerSecond);
+    void setPaused(bool paused);
+    void setPauseSupported(bool supported);
     void reset();
 
     static FileOperation *s_instance;
@@ -102,6 +140,9 @@ private:
     qulonglong m_speed = 0;
     QString m_operation;
     QString m_destination;
+    QString m_sourceName;
+    bool m_paused = false;
+    bool m_pauseSupported = false;
 
 #ifdef KIO_AVAILABLE
     struct CopyRequest
@@ -113,5 +154,14 @@ private:
 
     QList<CopyRequest> m_copyQueue;
     KJob *m_job = nullptr;
+
+    QTimer *m_localCopyTimer = nullptr;
+    QFile m_localSource;
+    QFile m_localDestination;
+    QElapsedTimer m_localCopyElapsed;
+    QUrl m_localSourceUrl;
+    QString m_localDestinationPath;
+    QString m_localTemporaryPath;
+    bool m_localCopyActive = false;
 #endif
 };

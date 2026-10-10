@@ -117,6 +117,7 @@ ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} SOURCES
     controls.${QT_MAJOR_VERSION}/FavButton.qml
     controls.${QT_MAJOR_VERSION}/FileDialog.qml
     controls.${QT_MAJOR_VERSION}/FileListingDialog.qml
+    controls.${QT_MAJOR_VERSION}/FileOperationIndicator.qml
     controls.${QT_MAJOR_VERSION}/FileOperationDialog.qml
     controls.${QT_MAJOR_VERSION}/NewTagDialog.qml
     controls.${QT_MAJOR_VERSION}/PlacesListBrowser.qml

@@ -62,6 +62,7 @@ void FileBrowsingPlugin::registerTypes(const char *uri)
         return FileOperation::instance();
     });
 
+    qmlRegisterType(componentUrl(QStringLiteral("FileOperationIndicator.qml")), uri, 1, 0, "FileOperationIndicator");
     qmlRegisterType(componentUrl(QStringLiteral("FileOperationDialog.qml")), uri, 1, 0, "FileOperationDialog");
     
     //File Tagging components
