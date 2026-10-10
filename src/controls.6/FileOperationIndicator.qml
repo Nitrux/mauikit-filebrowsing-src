@@ -14,14 +14,14 @@ ToolButton
     property Popup transferCenter: null
     property bool transferCenterWasOpenOnPress: false
 
-    readonly property bool hasTransfers: FB.FileOperation.running || FB.FileOperation.queuedCount > 0
-    readonly property int transferCount: (FB.FileOperation.running ? 1 : 0) + FB.FileOperation.queuedCount
+    readonly property bool hasTransfers: FB.FileOperation.operationCount > 0
+    readonly property int transferCount: FB.FileOperation.operationCount
 
     visible: hasTransfers
     enabled: hasTransfers && transferCenter !== null
     display: ToolButton.IconOnly
     icon.name: FB.FileOperation.paused ? "media-playback-start" : "edit-copy"
-    text: i18np("%1 file transfer", "%1 file transfers", transferCount)
+    text: i18np("%1 file operation", "%1 file operations", transferCount)
 
     Maui.Controls.badgeText: transferCount > 1 ? String(transferCount) : ""
 

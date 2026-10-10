@@ -1,14 +1,18 @@
 #include "fileoperation.h"
 
-#ifdef KIO_AVAILABLE
-#include <KIO/DeleteJob>
-#include <KIO/CopyJob>
-#include <KJob>
-#include <QVariantMap>
 #include <QDir>
+
+#ifdef KIO_AVAILABLE
+#include <KIO/CopyJob>
+#include <KIO/DeleteJob>
+#include <KJob>
+#include <QDirIterator>
 #include <QFileInfo>
 #include <QTimer>
 #endif
+
+#include <QVariantMap>
+#include <utility>
 
 namespace
 {
@@ -25,7 +29,6 @@ QString sourceNameForUrls(const QList<QUrl> &urls)
     const auto name = urls.constFirst().fileName();
     return name.isEmpty() ? displayUrl(urls.constFirst()) : name;
 }
-}
 
 #ifdef KIO_AVAILABLE
 bool hasLocalPartialCopy(const QUrl &source, const QUrl &destination)
@@ -40,7 +43,62 @@ bool hasLocalPartialCopy(const QUrl &source, const QUrl &destination)
     const QDir destinationDir(destination.toLocalFile());
     return QFileInfo::exists(destinationDir.filePath(sourceInfo.fileName() + QStringLiteral(".part")));
 }
+
+void suspendKioCopyJob(KJob *job)
+{
+    if (job)
+        job->suspend();
+}
 #endif
+
+}
+
+struct FileOperation::Operation
+{
+    int id = 0;
+    QString kind;
+    QString operation;
+    QList<QUrl> urls;
+    QUrl destinationUrl;
+    QString sourceName;
+    QString destination;
+    int itemCount = 0;
+
+    bool started = false;
+    bool active = false;
+    bool finished = false;
+    bool failed = false;
+    bool cancelRequested = false;
+    bool paused = false;
+    bool pauseSupported = false;
+    bool conflictPending = false;
+    bool overwriteExisting = false;
+    QUrl conflictSource;
+    QUrl conflictDestination;
+    int progress = 0;
+    qulonglong processedBytes = 0;
+    qulonglong totalBytes = 0;
+    qulonglong speed = 0;
+    QString errorMessage;
+
+#ifdef KIO_AVAILABLE
+    KJob *job = nullptr;
+    QTimer *localTimer = nullptr;
+    QTimer *pauseTimer = nullptr;
+    QFile localSource;
+    QFile localDestination;
+    QElapsedTimer localElapsed;
+    QUrl localSourceUrl;
+    QList<QUrl> localCopySources;
+    QList<QString> localCopyDestinations;
+    int localSourceIndex = 0;
+    qulonglong localCompletedBytes = 0;
+    qulonglong localCurrentSourceSize = 0;
+    QString localDestinationPath;
+    QString localTemporaryPath;
+    bool localCopyActive = false;
+#endif
+};
 
 FileOperation *FileOperation::s_instance = nullptr;
 
@@ -48,16 +106,23 @@ FileOperation::FileOperation(QObject *parent)
     : QObject(parent)
 {
     s_instance = this;
-
-#ifdef KIO_AVAILABLE
-    m_localCopyTimer = new QTimer(this);
-    m_localCopyTimer->setSingleShot(true);
-    QObject::connect(m_localCopyTimer, &QTimer::timeout, this, &FileOperation::processLocalCopy);
-#endif
 }
 
 FileOperation::~FileOperation()
 {
+    for (auto *operation : std::as_const(m_operations))
+    {
+#ifdef KIO_AVAILABLE
+        if (operation->localTimer)
+            operation->localTimer->stop();
+        if (operation->pauseTimer)
+            operation->pauseTimer->stop();
+        operation->localSource.close();
+        operation->localDestination.close();
+#endif
+        delete operation;
+    }
+
     if (s_instance == this)
         s_instance = nullptr;
 }
@@ -70,397 +135,726 @@ FileOperation *FileOperation::instance()
     return s_instance;
 }
 
-#ifdef KIO_AVAILABLE
-bool FileOperation::startLocalCopy(const QUrl &source, const QUrl &destination, const QString &operation)
+bool FileOperation::startCopy(const QList<QUrl> &urls, const QUrl &destination, const QString &operation)
 {
-    if (operation != QStringLiteral("copy") && operation != QStringLiteral("paste"))
+    return instance()->enqueueOperation(QStringLiteral("copy"), operation, urls, destination);
+}
+
+bool FileOperation::startMove(const QList<QUrl> &urls, const QUrl &destination, const QString &operation)
+{
+    return instance()->enqueueOperation(QStringLiteral("move"), operation, urls, destination);
+}
+
+bool FileOperation::startDelete(const QList<QUrl> &urls)
+{
+    return instance()->enqueueOperation(QStringLiteral("delete"), QStringLiteral("delete"), urls, {});
+}
+
+bool FileOperation::startTrash(const QList<QUrl> &urls)
+{
+    return instance()->enqueueOperation(QStringLiteral("trash"), QStringLiteral("trash"), urls, {});
+}
+
+bool FileOperation::enqueueOperation(const QString &kind, const QString &operationName, const QList<QUrl> &urls, const QUrl &destination)
+{
+    if (urls.isEmpty() || ((kind != QStringLiteral("delete") && kind != QStringLiteral("trash")) && destination.isEmpty()))
         return false;
 
-    if (!source.isLocalFile() || !destination.isLocalFile())
-        return false;
-
-    const QFileInfo sourceInfo(source.toLocalFile());
-    const QDir destinationDir(destination.toLocalFile());
-    if (!sourceInfo.exists() || !sourceInfo.isFile() || sourceInfo.isSymLink() || !destinationDir.exists())
-        return false;
-
-    const QString destinationPath = destinationDir.filePath(sourceInfo.fileName());
-    const QString temporaryPath = destinationPath + QStringLiteral(".part");
-    const QFileInfo destinationInfo(destinationPath);
-    const bool temporaryExists = QFileInfo::exists(temporaryPath);
-    if (destinationInfo.exists())
+#ifndef KIO_AVAILABLE
+    Q_UNUSED(kind)
+    Q_UNUSED(operationName)
+    Q_UNUSED(urls)
+    Q_UNUSED(destination)
+    return false;
+#else
+    for (const auto *existing : std::as_const(m_operations))
     {
-        if (!temporaryExists)
-            return false;
+        if (existing->finished || existing->kind != kind || existing->destinationUrl != destination || existing->urls.size() != urls.size())
+            continue;
 
-        // A final file alongside its matching .part is an interrupted copy artifact.
-        if (!QFile::remove(destinationPath))
+        bool sameSources = true;
+        for (const QUrl &url : urls)
+        {
+            if (!existing->urls.contains(url))
+            {
+                sameSources = false;
+                break;
+            }
+        }
+
+        if (sameSources)
             return false;
     }
 
-    m_localSource.close();
-    m_localDestination.close();
-    m_localSource.setFileName(sourceInfo.filePath());
-    if (!m_localSource.open(QIODevice::ReadOnly))
+    auto *operation = new Operation;
+    operation->id = m_nextId++;
+    operation->kind = kind;
+    operation->operation = operationName;
+    operation->urls = urls;
+    operation->destinationUrl = destination;
+    operation->destination = destination.isEmpty() ? QString() : displayUrl(destination);
+    operation->itemCount = urls.count();
+    operation->sourceName = sourceNameForUrls(urls);
+    m_operations.append(operation);
+
+    notifyOperationsChanged();
+    Q_EMIT operationAdded(operation->id);
+    startPendingOperations();
+    return true;
+#endif
+}
+
+void FileOperation::startPendingOperations()
+{
+#ifdef KIO_AVAILABLE
+    while (true)
+    {
+        Operation *pending = nullptr;
+        for (auto *operation : std::as_const(m_operations))
+        {
+            if (!operation->started && !operation->finished && !operation->conflictPending && !hasActiveConflict(operation))
+            {
+                pending = operation;
+                break;
+            }
+        }
+
+        if (!pending)
+            return;
+
+        QString errorMessage;
+        if (startOperation(pending, &errorMessage))
+            continue;
+
+        if (pending->conflictPending)
+        {
+            notifyOperationsChanged();
+            continue;
+        }
+
+        pending->started = true;
+        pending->finished = true;
+        pending->failed = true;
+        pending->errorMessage = errorMessage.isEmpty() ? QStringLiteral("Could not start the operation") : errorMessage;
+        Q_EMIT finished(false, pending->errorMessage);
+        notifyOperationsChanged();
+    }
+#endif
+}
+
+bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
+{
+#ifdef KIO_AVAILABLE
+    if (operation->kind == QStringLiteral("copy") || operation->kind == QStringLiteral("paste"))
+    {
+        if (startLocalCopy(operation))
+            return true;
+
+        if (operation->conflictPending)
+            return false;
+
+        if (operation->urls.size() == 1 && hasLocalPartialCopy(operation->urls.constFirst(), operation->destinationUrl))
+        {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Could not resume the partial copy");
+            return false;
+        }
+    }
+
+    KJob *job = nullptr;
+    if (operation->kind == QStringLiteral("delete"))
+        job = KIO::del(operation->urls, KIO::HideProgressInfo);
+    else if (operation->kind == QStringLiteral("trash"))
+        job = KIO::trash(operation->urls, KIO::HideProgressInfo);
+    else if (operation->kind == QStringLiteral("move"))
+        job = KIO::move(operation->urls, operation->destinationUrl, KIO::HideProgressInfo);
+    else
+        job = KIO::copy(operation->urls, operation->destinationUrl, KIO::HideProgressInfo);
+
+    if (!job)
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Could not create the file operation");
+        return false;
+    }
+
+    operation->job = job;
+    operation->started = true;
+    operation->active = true;
+    operation->paused = false;
+    operation->pauseSupported = true;
+    operation->progress = 0;
+    operation->processedBytes = 0;
+    operation->totalBytes = 0;
+    operation->speed = 0;
+
+    Q_EMIT started(operation->operation, operation->itemCount, operation->destination);
+    notifyOperationsChanged();
+
+    if (auto *copyJob = qobject_cast<KIO::CopyJob *>(job))
+    {
+        QObject::connect(copyJob, &KIO::CopyJob::copyingDone, this, [this, operation](auto *, const QUrl &from, const QUrl &to, const auto &, bool, bool) {
+            if (operation->active)
+                Q_EMIT itemFinished(operation->operation, from.toString(), to.toString());
+        });
+    }
+
+    QObject::connect(job, SIGNAL(percentChanged(KJob*, unsigned long)), this, SLOT(onPercent(KJob*, unsigned long)));
+    QObject::connect(job, SIGNAL(processedSize(KJob*, qulonglong)), this, SLOT(onProcessedSize(KJob*, qulonglong)));
+    QObject::connect(job, SIGNAL(totalSize(KJob*, qulonglong)), this, SLOT(onTotalSize(KJob*, qulonglong)));
+    QObject::connect(job, SIGNAL(speed(KJob*, unsigned long)), this, SLOT(onSpeed(KJob*, unsigned long)));
+    QObject::connect(job, &KJob::result, this, [this, operation](KJob *finishedJob) {
+        finishKioOperation(operation, finishedJob);
+    });
+
+    job->start();
+    return true;
+#else
+    Q_UNUSED(operation)
+    Q_UNUSED(errorMessage)
+    return false;
+#endif
+}
+
+#ifdef KIO_AVAILABLE
+bool FileOperation::startLocalCopy(Operation *operation)
+{
+    if (operation->kind != QStringLiteral("copy") || operation->urls.isEmpty())
         return false;
 
-    m_localDestinationPath = destinationPath;
-    m_localTemporaryPath = temporaryPath;
-    m_localDestination.setFileName(m_localTemporaryPath);
+    if (!operation->destinationUrl.isLocalFile())
+        return false;
+
+    const QDir destinationDir(operation->destinationUrl.toLocalFile());
+    if (!destinationDir.exists())
+        return false;
+
+    QList<QUrl> localSources;
+    QList<QString> localDestinations;
+    QList<QString> localDirectories;
+    qulonglong totalBytes = 0;
+
+    const auto addDirectory = [&localDirectories](const QString &path) {
+        if (!localDirectories.contains(path))
+            localDirectories.append(path);
+    };
+
+    const auto requestConflict = [operation](const QUrl &source, const QString &destination) {
+        operation->conflictPending = true;
+        operation->conflictSource = source;
+        operation->conflictDestination = QUrl::fromLocalFile(destination);
+    };
+
+    for (const QUrl &url : operation->urls)
+    {
+        if (!url.isLocalFile())
+            return false;
+
+        const QFileInfo sourceInfo(url.toLocalFile());
+        if (!sourceInfo.exists() || sourceInfo.isSymLink() || (!sourceInfo.isFile() && !sourceInfo.isDir()))
+            return false;
+
+        const QString destinationRoot = destinationDir.filePath(sourceInfo.fileName());
+        const QFileInfo destinationRootInfo(destinationRoot);
+        if (sourceInfo.isDir())
+        {
+            if (destinationRootInfo.exists() && !destinationRootInfo.isDir())
+                return false;
+
+            addDirectory(destinationRoot);
+            const QDir sourceDir(sourceInfo.filePath());
+            QDirIterator iterator(sourceInfo.filePath(), QDir::AllEntries | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+            while (iterator.hasNext())
+            {
+                iterator.next();
+                const QFileInfo info = iterator.fileInfo();
+                if (info.isSymLink() || (!info.isFile() && !info.isDir()))
+                    return false;
+
+                const QString destinationPath = QDir(destinationRoot).filePath(sourceDir.relativeFilePath(info.filePath()));
+                if (info.isDir())
+                {
+                    addDirectory(destinationPath);
+                    continue;
+                }
+
+                if (localDestinations.contains(destinationPath))
+                    return false;
+
+                const QFileInfo destinationInfo(destinationPath);
+                const bool temporaryExists = QFileInfo::exists(destinationPath + QStringLiteral(".part"));
+                if (destinationInfo.exists() && !destinationInfo.isFile())
+                    return false;
+                if (destinationInfo.exists() && !temporaryExists && !operation->overwriteExisting)
+                {
+                    requestConflict(QUrl::fromLocalFile(info.filePath()), destinationPath);
+                    return false;
+                }
+
+                localSources.append(QUrl::fromLocalFile(info.filePath()));
+                localDestinations.append(destinationPath);
+                totalBytes += static_cast<qulonglong>(info.size());
+            }
+            continue;
+        }
+
+        if (localDestinations.contains(destinationRoot))
+            return false;
+
+        const bool temporaryExists = QFileInfo::exists(destinationRoot + QStringLiteral(".part"));
+        if (destinationRootInfo.exists() && !destinationRootInfo.isFile())
+            return false;
+        if (destinationRootInfo.exists() && !temporaryExists && !operation->overwriteExisting)
+        {
+            requestConflict(url, destinationRoot);
+            return false;
+        }
+
+        localSources.append(url);
+        localDestinations.append(destinationRoot);
+        totalBytes += static_cast<qulonglong>(sourceInfo.size());
+    }
+
+    for (const QString &directory : std::as_const(localDirectories))
+    {
+        if (!QDir().mkpath(directory))
+            return false;
+    }
+
+    operation->localCopySources = localSources;
+    operation->localCopyDestinations = localDestinations;
+    operation->localSourceIndex = 0;
+    operation->localCompletedBytes = 0;
+    operation->localCurrentSourceSize = 0;
+    operation->processedBytes = 0;
+    operation->totalBytes = totalBytes;
+    operation->progress = 0;
+    operation->speed = 0;
+
+    if (!localSources.isEmpty() && !prepareLocalCopySource(operation))
+        return false;
+
+    operation->localCopyActive = true;
+    operation->started = true;
+    operation->active = true;
+    operation->paused = false;
+    operation->pauseSupported = true;
+
+    operation->localTimer = new QTimer(this);
+    operation->localTimer->setSingleShot(true);
+    QObject::connect(operation->localTimer, &QTimer::timeout, this, [this, operation]() {
+        processLocalCopy(operation);
+    });
+
+    Q_EMIT started(operation->operation, operation->itemCount, operation->destination);
+    notifyOperationsChanged();
+    operation->localElapsed.start();
+    operation->localTimer->start(0);
+    return true;
+}
+
+bool FileOperation::prepareLocalCopySource(Operation *operation)
+{
+    if (operation->localSourceIndex < 0 || operation->localSourceIndex >= operation->localCopySources.size())
+        return false;
+
+    const QUrl source = operation->localCopySources.at(operation->localSourceIndex);
+    const QFileInfo sourceInfo(source.toLocalFile());
+    const QString destinationPath = operation->localCopyDestinations.at(operation->localSourceIndex);
+    const QString temporaryPath = destinationPath + QStringLiteral(".part");
+    const QFileInfo destinationInfo(destinationPath);
+    const bool temporaryExists = QFileInfo::exists(temporaryPath);
+
+    if (destinationInfo.exists() && !temporaryExists && !operation->overwriteExisting)
+        return false;
+
+    if (destinationInfo.exists() && (temporaryExists || operation->overwriteExisting) && !QFile::remove(destinationPath))
+        return false;
+
+    operation->localSource.close();
+    operation->localDestination.close();
+    operation->localSource.setFileName(sourceInfo.filePath());
+    if (!operation->localSource.open(QIODevice::ReadOnly))
+        return false;
+
+    operation->localDestinationPath = destinationPath;
+    operation->localTemporaryPath = temporaryPath;
+    operation->localDestination.setFileName(temporaryPath);
 
     QIODevice::OpenMode destinationMode = QIODevice::ReadWrite;
     if (!temporaryExists)
         destinationMode |= QIODevice::Truncate;
 
-    if (!m_localDestination.open(destinationMode))
+    if (!operation->localDestination.open(destinationMode))
     {
-        m_localSource.close();
-        m_localDestinationPath.clear();
-        m_localTemporaryPath.clear();
+        operation->localSource.close();
         return false;
     }
 
-    qint64 partialSize = temporaryExists ? m_localDestination.size() : 0;
+    qint64 partialSize = temporaryExists ? operation->localDestination.size() : 0;
     if (partialSize > sourceInfo.size())
     {
-        if (!m_localDestination.resize(0))
+        if (!operation->localDestination.resize(0))
         {
-            m_localSource.close();
-            m_localDestination.close();
-            m_localDestinationPath.clear();
-            m_localTemporaryPath.clear();
+            operation->localSource.close();
+            operation->localDestination.close();
             return false;
         }
         partialSize = 0;
     }
 
-    if (!m_localSource.seek(partialSize) || !m_localDestination.seek(partialSize))
+    if (!operation->localSource.seek(partialSize) || !operation->localDestination.seek(partialSize))
     {
-        m_localSource.close();
-        m_localDestination.close();
-        m_localDestinationPath.clear();
-        m_localTemporaryPath.clear();
+        operation->localSource.close();
+        operation->localDestination.close();
         return false;
     }
 
-    m_localSourceUrl = source;
-    m_localCopyActive = true;
-    m_cancelled = false;
-    m_operation = operation;
-    m_destination = displayUrl(destination);
-    m_sourceName = sourceNameForUrls(QList<QUrl>{source});
-    setTotalBytes(static_cast<qulonglong>(sourceInfo.size()));
-    setProcessedBytes(static_cast<qulonglong>(partialSize));
-    setProgress(sourceInfo.size() > 0 ? static_cast<int>((partialSize * 100) / sourceInfo.size()) : 0);
-    setSpeed(0);
-    setPaused(false);
-    setPauseSupported(true);
-    setRunning(true);
-
-    Q_EMIT operationChanged();
-    Q_EMIT destinationChanged();
-    Q_EMIT sourceNameChanged();
-    Q_EMIT started(m_operation, 1, m_destination);
-
-    m_localCopyElapsed.start();
-    m_localCopyTimer->start(0);
+    operation->localSourceUrl = source;
+    operation->localCurrentSourceSize = static_cast<qulonglong>(sourceInfo.size());
+    operation->processedBytes = operation->localCompletedBytes + static_cast<qulonglong>(partialSize);
+    operation->progress = operation->totalBytes > 0 ? static_cast<int>((operation->processedBytes * 100) / operation->totalBytes) : 0;
     return true;
 }
-void FileOperation::processLocalCopy()
+
+void FileOperation::processLocalCopy(Operation *operation)
 {
-    if (!m_localCopyActive || m_paused)
+    if (!operation->localCopyActive || operation->paused || operation->cancelRequested)
         return;
+
+    if (operation->localSourceIndex >= operation->localCopySources.size())
+    {
+        finishLocalCopy(operation, true, QString());
+        return;
+    }
 
     constexpr qint64 copyChunkSize = 1024 * 1024;
-    const QByteArray data = m_localSource.read(copyChunkSize);
+    const QByteArray data = operation->localSource.read(copyChunkSize);
     if (data.isEmpty())
     {
-        if (m_localSource.error() != QFile::NoError)
+        if (operation->localSource.error() != QFile::NoError)
         {
-            finishLocalCopy(false, m_localSource.errorString());
+            finishLocalCopy(operation, false, operation->localSource.errorString());
             return;
         }
 
-        if (!m_localDestination.flush())
+        if (!operation->localDestination.flush())
         {
-            finishLocalCopy(false, m_localDestination.errorString());
+            finishLocalCopy(operation, false, operation->localDestination.errorString());
             return;
         }
 
-        m_localSource.close();
-        m_localDestination.close();
-        if (!QFile::rename(m_localTemporaryPath, m_localDestinationPath))
+        operation->localSource.close();
+        operation->localDestination.close();
+        if (!QFile::rename(operation->localTemporaryPath, operation->localDestinationPath))
         {
-            finishLocalCopy(false, QStringLiteral("Could not finalize the copied file"));
+            finishLocalCopy(operation, false, QStringLiteral("Could not finalize the copied file"));
             return;
         }
 
-        finishLocalCopy(true, QString());
+        Q_EMIT itemFinished(operation->operation, operation->localSourceUrl.toString(), QUrl::fromLocalFile(operation->localDestinationPath).toString());
+        operation->localCompletedBytes += operation->localCurrentSourceSize;
+        ++operation->localSourceIndex;
+
+        if (operation->localSourceIndex >= operation->localCopySources.size())
+        {
+            finishLocalCopy(operation, true, QString());
+            return;
+        }
+
+        if (!prepareLocalCopySource(operation))
+        {
+            finishLocalCopy(operation, false, QStringLiteral("Could not prepare the next file"));
+            return;
+        }
+
+        notifyOperationsChanged();
+        operation->localTimer->start(0);
         return;
     }
 
-    if (m_localDestination.write(data) != data.size())
+    if (operation->localDestination.write(data) != data.size())
     {
-        finishLocalCopy(false, m_localDestination.errorString());
+        finishLocalCopy(operation, false, operation->localDestination.errorString());
         return;
     }
 
-    setProcessedBytes(m_processedBytes + static_cast<qulonglong>(data.size()));
-    if (m_totalBytes > 0)
-        setProgress(static_cast<int>((m_processedBytes * 100) / m_totalBytes));
-
-    const qint64 elapsed = m_localCopyElapsed.elapsed();
+    operation->processedBytes += static_cast<qulonglong>(data.size());
+    operation->progress = operation->totalBytes > 0 ? static_cast<int>((operation->processedBytes * 100) / operation->totalBytes) : 0;
+    const qint64 elapsed = operation->localElapsed.elapsed();
     if (elapsed > 0)
-        setSpeed((m_processedBytes * 1000) / static_cast<qulonglong>(elapsed));
+        operation->speed = (operation->processedBytes * 1000) / static_cast<qulonglong>(elapsed);
 
-    m_localCopyTimer->start(0);
+    notifyOperationsChanged();
+    operation->localTimer->start(0);
 }
 
-void FileOperation::finishLocalCopy(bool success, const QString &errorMessage)
+void FileOperation::finishLocalCopy(Operation *operation, bool success, const QString &errorMessage)
 {
-    m_localCopyTimer->stop();
-    m_localSource.close();
-    m_localDestination.close();
+    if (operation->localTimer)
+    {
+        operation->localTimer->stop();
+        operation->localTimer->deleteLater();
+        operation->localTimer = nullptr;
+    }
 
-    const QUrl source = m_localSourceUrl;
-    const QUrl destination = QUrl::fromLocalFile(m_localDestinationPath);
-    if (!success && !m_localTemporaryPath.isEmpty())
-        QFile::remove(m_localTemporaryPath);
+    operation->localSource.close();
+    operation->localDestination.close();
+    if (!success && !operation->localTemporaryPath.isEmpty())
+        QFile::remove(operation->localTemporaryPath);
 
-    m_localCopyActive = false;
-    setPaused(false);
-    setPauseSupported(false);
+    operation->localCopyActive = false;
     if (success)
     {
-        setProcessedBytes(m_totalBytes);
-        setProgress(100);
-        Q_EMIT itemFinished(m_operation, source.toString(), destination.toString());
+        operation->processedBytes = operation->totalBytes;
+        operation->progress = 100;
     }
-
-    setRunning(false);
-    Q_EMIT finished(success, errorMessage);
-    reset();
-    startNextCopy();
-}
-#endif
-
-bool FileOperation::startCopy(const QList<QUrl> &urls, const QUrl &destination, const QString &operationName)
-{
-    if (urls.isEmpty() || destination.isEmpty())
-        return false;
-
-    auto operation = FileOperation::instance();
-
-    if (operation->running())
-    {
-#ifdef KIO_AVAILABLE
-        operation->m_copyQueue.append(CopyRequest{urls, destination, operationName});
-        Q_EMIT operation->queueChanged();
-        return true;
-#else
-        return false;
-#endif
-    }
-
-#ifdef KIO_AVAILABLE
-    if (urls.size() == 1)
-    {
-        if (operation->startLocalCopy(urls.constFirst(), destination, operationName))
-            return true;
-
-        if (hasLocalPartialCopy(urls.constFirst(), destination))
-            return false;
-    }
-
-    auto job = KIO::copy(urls, destination, KIO::HideProgressInfo);
-    if (!job)
-        return false;
-
-    job->setAutoRename(true);
-
-    operation->m_job = job;
-    operation->m_cancelled = false;
-    operation->m_operation = operationName;
-    operation->m_destination = destination.isLocalFile() ? destination.toLocalFile() : destination.toDisplayString();
-    operation->m_sourceName = sourceNameForUrls(urls);
-    operation->setProgress(0);
-    operation->setProcessedBytes(0);
-    operation->setTotalBytes(0);
-    operation->setSpeed(0);
-    operation->setPaused(false);
-    operation->setPauseSupported(false);
-    operation->setRunning(true);
-
-    Q_EMIT operation->operationChanged();
-    Q_EMIT operation->destinationChanged();
-    Q_EMIT operation->sourceNameChanged();
-    Q_EMIT operation->started(operation->m_operation, urls.count(), operation->m_destination);
-
-    QObject::connect(job, &KIO::CopyJob::copyingDone, operation, [operation](auto *, const QUrl &from, const QUrl &to, const auto &, bool, bool) {
-        Q_EMIT operation->itemFinished(operation->m_operation, from.toString(), to.toString());
-    });
-
-    QObject::connect(job, SIGNAL(percentChanged(KJob*, unsigned long)), operation, SLOT(onPercent(KJob*, unsigned long)));
-    QObject::connect(job, SIGNAL(processedSize(KJob*, qulonglong)), operation, SLOT(onProcessedSize(KJob*, qulonglong)));
-    QObject::connect(job, SIGNAL(totalSize(KJob*, qulonglong)), operation, SLOT(onTotalSize(KJob*, qulonglong)));
-    QObject::connect(job, SIGNAL(speed(KJob*, unsigned long)), operation, SLOT(onSpeed(KJob*, unsigned long)));
-
-    QObject::connect(job, &KJob::result, operation, [operation](KJob *finishedJob) {
-        operation->finishJob(finishedJob);
-    });
-
-    job->start();
-    return true;
-#else
-    Q_UNUSED(operation)
-    Q_UNUSED(urls)
-    Q_UNUSED(destination)
-    Q_UNUSED(operationName)
-    return false;
-#endif
+    finishOperation(operation, success, errorMessage);
 }
 
-bool FileOperation::startMove(const QList<QUrl> &urls, const QUrl &destination, const QString &operationName)
+void FileOperation::finishKioOperation(Operation *operation, KJob *job)
 {
-    if (urls.isEmpty() || destination.isEmpty())
-        return false;
-
-    auto operation = FileOperation::instance();
-
-    if (operation->running())
-        return false;
-
-#ifdef KIO_AVAILABLE
-    auto job = KIO::move(urls, destination, KIO::HideProgressInfo);
-    if (!job)
-        return false;
-
-    job->setAutoRename(true);
-
-    operation->m_job = job;
-    operation->m_cancelled = false;
-    operation->m_operation = operationName;
-    operation->m_destination = destination.isLocalFile() ? destination.toLocalFile() : destination.toDisplayString();
-    operation->m_sourceName = sourceNameForUrls(urls);
-    operation->setProgress(0);
-    operation->setProcessedBytes(0);
-    operation->setTotalBytes(0);
-    operation->setSpeed(0);
-    operation->setPaused(false);
-    operation->setPauseSupported(false);
-    operation->setRunning(true);
-
-    Q_EMIT operation->operationChanged();
-    Q_EMIT operation->destinationChanged();
-    Q_EMIT operation->sourceNameChanged();
-    Q_EMIT operation->started(operation->m_operation, urls.count(), operation->m_destination);
-
-    QObject::connect(job, &KIO::CopyJob::copyingDone, operation, [operation](auto *, const QUrl &from, const QUrl &to, const auto &, bool, bool) {
-        Q_EMIT operation->itemFinished(operation->m_operation, from.toString(), to.toString());
-    });
-
-    QObject::connect(job, SIGNAL(percentChanged(KJob*, unsigned long)), operation, SLOT(onPercent(KJob*, unsigned long)));
-    QObject::connect(job, SIGNAL(processedSize(KJob*, qulonglong)), operation, SLOT(onProcessedSize(KJob*, qulonglong)));
-    QObject::connect(job, SIGNAL(totalSize(KJob*, qulonglong)), operation, SLOT(onTotalSize(KJob*, qulonglong)));
-    QObject::connect(job, SIGNAL(speed(KJob*, unsigned long)), operation, SLOT(onSpeed(KJob*, unsigned long)));
-
-    QObject::connect(job, &KJob::result, operation, [operation](KJob *finishedJob) {
-        operation->finishJob(finishedJob);
-    });
-
-    job->start();
-    return true;
-#else
-    Q_UNUSED(operation)
-    Q_UNUSED(urls)
-    Q_UNUSED(destination)
-    Q_UNUSED(operationName)
-    return false;
-#endif
-}
-
-bool FileOperation::startDelete(const QList<QUrl> &urls)
-{
-    if (urls.isEmpty())
-        return false;
-
-    auto operation = FileOperation::instance();
-
-    if (operation->running())
-        return false;
-
-#ifdef KIO_AVAILABLE
-    auto job = KIO::del(urls, KIO::HideProgressInfo);
-    if (!job)
-        return false;
-
-    operation->m_job = job;
-    operation->m_cancelled = false;
-    operation->m_operation = QStringLiteral("delete");
-    operation->m_destination.clear();
-    operation->m_sourceName = sourceNameForUrls(urls);
-    operation->setProgress(0);
-    operation->setProcessedBytes(0);
-    operation->setTotalBytes(0);
-    operation->setSpeed(0);
-    operation->setPaused(false);
-    operation->setPauseSupported(false);
-    operation->setRunning(true);
-
-    Q_EMIT operation->operationChanged();
-    Q_EMIT operation->destinationChanged();
-    Q_EMIT operation->sourceNameChanged();
-    Q_EMIT operation->started(operation->m_operation, urls.count(), QString());
-
-    QObject::connect(job, SIGNAL(percentChanged(KJob*, unsigned long)), operation, SLOT(onPercent(KJob*, unsigned long)));
-    QObject::connect(job, SIGNAL(processedSize(KJob*, qulonglong)), operation, SLOT(onProcessedSize(KJob*, qulonglong)));
-    QObject::connect(job, SIGNAL(totalSize(KJob*, qulonglong)), operation, SLOT(onTotalSize(KJob*, qulonglong)));
-    QObject::connect(job, SIGNAL(speed(KJob*, unsigned long)), operation, SLOT(onSpeed(KJob*, unsigned long)));
-
-    QObject::connect(job, &KJob::result, operation, [operation](KJob *finishedJob) {
-        operation->finishJob(finishedJob);
-    });
-
-    job->start();
-    return true;
-#else
-    Q_UNUSED(operation)
-    Q_UNUSED(urls)
-    return false;
-#endif
-}
-
-#ifdef KIO_AVAILABLE
-void FileOperation::finishJob(KJob *finishedJob)
-{
-    const bool success = !m_cancelled && finishedJob->error() == 0;
-    const QString errorMessage = success ? QString() : finishedJob->errorString();
-
-    m_job = nullptr;
-    setPaused(false);
-    setProgress(success ? 100 : m_progress);
-    setRunning(false);
-    Q_EMIT finished(success, errorMessage);
-    reset();
-
-    startNextCopy();
-}
-
-void FileOperation::startNextCopy()
-{
-    if (running() || m_copyQueue.isEmpty())
+    if (!operation || !operation->active)
         return;
 
-    const CopyRequest request = m_copyQueue.takeFirst();
-    Q_EMIT queueChanged();
-    if (!FileOperation::startCopy(request.urls, request.destination, request.operation))
-        startNextCopy();
+    operation->job = nullptr;
+    const bool success = !operation->cancelRequested && job && job->error() == 0;
+    finishOperation(operation, success, success ? QString() : (job ? job->errorString() : QString()));
 }
 #endif
+
+void FileOperation::finishOperation(Operation *operation, bool success, const QString &errorMessage)
+{
+    if (!operation)
+        return;
+
+#ifdef KIO_AVAILABLE
+    if (operation->pauseTimer)
+    {
+        operation->pauseTimer->stop();
+        operation->pauseTimer->deleteLater();
+        operation->pauseTimer = nullptr;
+    }
+#endif
+
+    operation->active = false;
+    operation->finished = true;
+    operation->paused = false;
+    operation->pauseSupported = false;
+    operation->failed = !success && !operation->cancelRequested;
+    operation->errorMessage = operation->failed ? errorMessage : QString();
+
+    const bool remove = success || operation->cancelRequested;
+    if (remove)
+        removeOperation(operation);
+
+    notifyOperationsChanged();
+    Q_EMIT finished(success, errorMessage);
+    startPendingOperations();
+}
+
+void FileOperation::refreshPrimaryOperation()
+{
+    Operation *primary = primaryOperation();
+    setRunning(activeCount() > 0);
+    setProgress(primary ? primary->progress : 0);
+    setProcessedBytes(primary ? primary->processedBytes : 0);
+    setTotalBytes(primary ? primary->totalBytes : 0);
+    setSpeed(primary ? primary->speed : 0);
+    const QString operationName = primary ? primary->operation : QString();
+    if (m_operation != operationName)
+    {
+        m_operation = operationName;
+        Q_EMIT operationChanged();
+    }
+    const QString destinationName = primary ? primary->destination : QString();
+    if (m_destination != destinationName)
+    {
+        m_destination = destinationName;
+        Q_EMIT destinationChanged();
+    }
+    const QString sourceName = primary ? primary->sourceName : QString();
+    if (m_sourceName != sourceName)
+    {
+        m_sourceName = sourceName;
+        Q_EMIT sourceNameChanged();
+    }
+    setPaused(primary ? primary->paused : false);
+    setPauseSupported(primary ? primary->pauseSupported : false);
+}
+
+void FileOperation::notifyOperationsChanged()
+{
+    refreshPrimaryOperation();
+    Q_EMIT operationsChanged();
+    Q_EMIT queueChanged();
+}
+
+void FileOperation::removeOperation(Operation *operation)
+{
+    if (!operation)
+        return;
+
+#ifdef KIO_AVAILABLE
+    if (operation->localTimer)
+    {
+        operation->localTimer->stop();
+        operation->localTimer->deleteLater();
+        operation->localTimer = nullptr;
+    }
+    if (operation->pauseTimer)
+    {
+        operation->pauseTimer->stop();
+        operation->pauseTimer->deleteLater();
+        operation->pauseTimer = nullptr;
+    }
+    operation->localSource.close();
+    operation->localDestination.close();
+#endif
+    m_operations.removeOne(operation);
+    delete operation;
+}
+
+FileOperation::Operation *FileOperation::findOperation(int id) const
+{
+    for (auto *operation : m_operations)
+    {
+        if (operation->id == id)
+            return operation;
+    }
+    return nullptr;
+}
+
+FileOperation::Operation *FileOperation::primaryOperation() const
+{
+    for (auto *operation : m_operations)
+    {
+        if (operation->active)
+            return operation;
+    }
+
+    for (auto *operation : m_operations)
+    {
+        if (!operation->finished)
+            return operation;
+    }
+
+    return m_operations.isEmpty() ? nullptr : m_operations.constFirst();
+}
+
+QList<QUrl> FileOperation::operationTargets(const Operation *operation) const
+{
+    if (!operation)
+        return {};
+
+    if (operation->kind == QStringLiteral("delete") || operation->kind == QStringLiteral("trash"))
+        return operation->urls;
+
+#ifdef KIO_AVAILABLE
+    if (operation->active && !operation->localCopyDestinations.isEmpty())
+    {
+        QList<QUrl> targets;
+        for (const QString &path : operation->localCopyDestinations)
+            targets.append(QUrl::fromLocalFile(path));
+        return targets;
+    }
+#endif
+
+    QList<QUrl> targets;
+    for (const QUrl &url : operation->urls)
+    {
+        QUrl target = operation->destinationUrl;
+        QString path = target.path();
+        if (!path.endsWith(QLatin1Char('/')))
+            path += QLatin1Char('/');
+        path += url.fileName();
+        target.setPath(path);
+        targets.append(target);
+    }
+    return targets;
+}
+
+bool FileOperation::hasActiveConflict(const Operation *operation) const
+{
+    if (!operation)
+        return false;
+
+    const auto targets = operationTargets(operation);
+    for (const auto *other : std::as_const(m_operations))
+    {
+        if (other == operation || !other->active)
+            continue;
+
+        const auto otherTargets = operationTargets(other);
+        for (const QUrl &target : targets)
+        {
+            const QString targetKey = target.isLocalFile()
+                    ? QDir::cleanPath(target.toLocalFile())
+                    : target.toString(QUrl::FullyEncoded);
+            for (const QUrl &otherTarget : otherTargets)
+            {
+                const QString otherKey = otherTarget.isLocalFile()
+                        ? QDir::cleanPath(otherTarget.toLocalFile())
+                        : otherTarget.toString(QUrl::FullyEncoded);
+                if (targetKey == otherKey
+                        || targetKey.startsWith(otherKey + QLatin1Char('/'))
+                        || otherKey.startsWith(targetKey + QLatin1Char('/')))
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+QVariantMap FileOperation::operationMap(const Operation *operation) const
+{
+    QVariantMap result;
+    if (!operation)
+        return result;
+
+    QString status = QStringLiteral("finished");
+    if (operation->active)
+        status = operation->paused ? QStringLiteral("paused") : QStringLiteral("running");
+    else if (!operation->started)
+        status = QStringLiteral("queued");
+    else if (operation->failed)
+        status = QStringLiteral("failed");
+
+    result.insert(QStringLiteral("id"), operation->id);
+    result.insert(QStringLiteral("kind"), operation->kind);
+    result.insert(QStringLiteral("operation"), operation->operation);
+    result.insert(QStringLiteral("sourceName"), operation->sourceName);
+    result.insert(QStringLiteral("destination"), operation->destination);
+    result.insert(QStringLiteral("itemCount"), operation->itemCount);
+    result.insert(QStringLiteral("status"), status);
+    result.insert(QStringLiteral("active"), operation->active);
+    result.insert(QStringLiteral("queued"), !operation->started && !operation->finished);
+    result.insert(QStringLiteral("failed"), operation->failed);
+    result.insert(QStringLiteral("progress"), operation->progress);
+    result.insert(QStringLiteral("processedBytes"), operation->processedBytes);
+    result.insert(QStringLiteral("totalBytes"), operation->totalBytes);
+    result.insert(QStringLiteral("speed"), operation->speed);
+    result.insert(QStringLiteral("paused"), operation->paused);
+    result.insert(QStringLiteral("pauseSupported"), operation->pauseSupported);
+    result.insert(QStringLiteral("conflictPending"), operation->conflictPending);
+    result.insert(QStringLiteral("conflictSource"), operation->conflictSource.isEmpty() ? QString() : displayUrl(operation->conflictSource));
+    result.insert(QStringLiteral("conflictDestination"), operation->conflictDestination.isEmpty() ? QString() : displayUrl(operation->conflictDestination));
+    result.insert(QStringLiteral("error"), operation->errorMessage);
+    const bool canMove = !operation->started && !operation->finished;
+    const int operationIndex = m_operations.indexOf(const_cast<Operation *>(operation));
+    const bool canMoveUp = canMove && operationIndex > 0 && !m_operations.at(operationIndex - 1)->started && !m_operations.at(operationIndex - 1)->finished;
+    const bool canMoveDown = canMove && operationIndex >= 0 && operationIndex + 1 < m_operations.size() && !m_operations.at(operationIndex + 1)->started && !m_operations.at(operationIndex + 1)->finished;
+    result.insert(QStringLiteral("canCancel"), operation->active || canMove);
+    result.insert(QStringLiteral("canClear"), !operation->active);
+    result.insert(QStringLiteral("canMove"), canMove);
+    result.insert(QStringLiteral("canMoveUp"), canMoveUp);
+    result.insert(QStringLiteral("canMoveDown"), canMoveDown);
+    return result;
+}
 
 bool FileOperation::running() const
 {
-    return m_running;
+    return activeCount() > 0;
 }
 
 int FileOperation::progress() const
@@ -508,141 +902,316 @@ bool FileOperation::pauseSupported() const
     return m_pauseSupported;
 }
 
+int FileOperation::activeCount() const
+{
+    int count = 0;
+    for (auto *operation : m_operations)
+        count += operation->active ? 1 : 0;
+    return count;
+}
+
 int FileOperation::queuedCount() const
 {
-#ifdef KIO_AVAILABLE
-    return m_copyQueue.size();
-#else
-    return 0;
-#endif
+    int count = 0;
+    for (auto *operation : m_operations)
+        count += !operation->started && !operation->finished ? 1 : 0;
+    return count;
+}
+
+int FileOperation::operationCount() const
+{
+    return m_operations.size();
+}
+
+QVariantList FileOperation::operations() const
+{
+    QVariantList result;
+    for (const auto *operation : m_operations)
+        result.append(operationMap(operation));
+    return result;
 }
 
 QVariantList FileOperation::queuedOperations() const
 {
-    QVariantList operations;
-#ifdef KIO_AVAILABLE
-    for (int index = 0; index < m_copyQueue.size(); ++index)
+    QVariantList result;
+    for (const auto *operation : m_operations)
     {
-        const auto &request = m_copyQueue.at(index);
-        QVariantMap operation;
-        operation.insert(QStringLiteral("index"), index);
-        operation.insert(QStringLiteral("operation"), request.operation);
-        operation.insert(QStringLiteral("itemCount"), request.urls.count());
-        operation.insert(QStringLiteral("sourceName"), sourceNameForUrls(request.urls));
-        operation.insert(QStringLiteral("destination"), displayUrl(request.destination));
-        operations.append(operation);
+        if (!operation->started && !operation->finished)
+            result.append(operationMap(operation));
     }
-#endif
-    return operations;
-}
-
-void FileOperation::cancelQueued(int index)
-{
-#ifdef KIO_AVAILABLE
-    if (index < 0 || index >= m_copyQueue.size())
-        return;
-
-    m_copyQueue.removeAt(index);
-    Q_EMIT queueChanged();
-#else
-    Q_UNUSED(index)
-#endif
-}
-
-void FileOperation::cancelAll()
-{
-#ifdef KIO_AVAILABLE
-    if (!m_copyQueue.isEmpty())
-    {
-        m_copyQueue.clear();
-        Q_EMIT queueChanged();
-    }
-#endif
-    cancel();
-}
-
-bool FileOperation::pause()
-{
-#ifdef KIO_AVAILABLE
-    if (m_localCopyActive)
-    {
-        if (m_paused)
-            return false;
-
-        m_localCopyTimer->stop();
-        setPaused(true);
-        return true;
-    }
-
-    return false;
-#else
-    return false;
-#endif
-}
-
-bool FileOperation::resume()
-{
-#ifdef KIO_AVAILABLE
-    if (!m_localCopyActive || !m_paused)
-        return false;
-
-    setPaused(false);
-    m_localCopyTimer->start(0);
-    return true;
-#else
-    return false;
-#endif
+    return result;
 }
 
 void FileOperation::cancel()
 {
-#ifdef KIO_AVAILABLE
-    if (m_localCopyActive)
+    Operation *primary = primaryOperation();
+    if (primary && primary->active)
+        cancelOperation(primary->id);
+}
+
+void FileOperation::cancelOperation(int id)
+{
+    Operation *operation = findOperation(id);
+    if (!operation)
+        return;
+
+    if (!operation->active)
     {
-        m_cancelled = true;
-        finishLocalCopy(false, QString());
+        removeOperation(operation);
+        notifyOperationsChanged();
+        startPendingOperations();
         return;
     }
 
-    if (m_job)
+    operation->cancelRequested = true;
+#ifdef KIO_AVAILABLE
+    if (operation->localCopyActive)
     {
-        m_cancelled = true;
+        finishLocalCopy(operation, false, QString());
+        return;
+    }
 
-        auto *job = m_job;
-        if (m_paused || job->isSuspended())
-            job->resume();
-
-        setPaused(false);
-        job->kill(KJob::EmitResult);
+    if (operation->job)
+    {
+        if (operation->pauseTimer)
+            operation->pauseTimer->stop();
+        if (operation->job->isSuspended())
+            operation->job->resume();
+        operation->job->kill(KJob::EmitResult);
     }
 #endif
 }
 
-#ifdef KIO_AVAILABLE
-void FileOperation::onPercent(KJob *, unsigned long percent)
+void FileOperation::clearOperation(int id)
 {
-    setProgress(static_cast<int>(percent));
+    Operation *operation = findOperation(id);
+    if (!operation || operation->active)
+        return;
+
+    removeOperation(operation);
+    notifyOperationsChanged();
+    startPendingOperations();
 }
+
+void FileOperation::cancelAll()
+{
+    const auto snapshot = m_operations;
+    for (auto *operation : snapshot)
+    {
+        if (!operation->active)
+            removeOperation(operation);
+    }
+    notifyOperationsChanged();
+
+    for (auto *operation : snapshot)
+    {
+        if (m_operations.contains(operation) && operation->active)
+            cancelOperation(operation->id);
+    }
+}
+
+bool FileOperation::pause()
+{
+    Operation *primary = primaryOperation();
+    return primary ? pauseOperation(primary->id) : false;
+}
+
+bool FileOperation::pauseOperation(int id)
+{
+    Operation *operation = findOperation(id);
+    if (!operation || !operation->active || operation->paused || !operation->pauseSupported)
+        return false;
+
+#ifdef KIO_AVAILABLE
+    if (operation->localCopyActive)
+    {
+        operation->localTimer->stop();
+        operation->paused = true;
+        notifyOperationsChanged();
+        return true;
+    }
+
+    if (operation->job && operation->job->suspend())
+    {
+        operation->paused = true;
+        if (qobject_cast<KIO::CopyJob *>(operation->job))
+        {
+            suspendKioCopyJob(operation->job);
+            if (!operation->pauseTimer)
+            {
+                operation->pauseTimer = new QTimer(this);
+                operation->pauseTimer->setInterval(1);
+                QObject::connect(operation->pauseTimer, &QTimer::timeout, this, [operation]() {
+                    if (!operation->active || !operation->paused || !operation->job)
+                    {
+                        if (operation->pauseTimer)
+                            operation->pauseTimer->stop();
+                        return;
+                    }
+                    suspendKioCopyJob(operation->job);
+                });
+            }
+            operation->pauseTimer->start();
+        }
+        notifyOperationsChanged();
+        return true;
+    }
 #endif
+    return false;
+}
+
+bool FileOperation::resume()
+{
+    Operation *primary = primaryOperation();
+    return primary ? resumeOperation(primary->id) : false;
+}
+
+bool FileOperation::resumeOperation(int id)
+{
+    Operation *operation = findOperation(id);
+    if (!operation || !operation->active || !operation->paused)
+        return false;
 
 #ifdef KIO_AVAILABLE
-void FileOperation::onProcessedSize(KJob *, qulonglong size)
-{
-    setProcessedBytes(size);
-    if (m_totalBytes > 0)
-        setProgress(static_cast<int>((static_cast<double>(size) / static_cast<double>(m_totalBytes)) * 100.0));
+    if (operation->localCopyActive)
+    {
+        operation->paused = false;
+        operation->localTimer->start(0);
+        notifyOperationsChanged();
+        return true;
+    }
+
+    if (operation->job && operation->job->resume())
+    {
+        operation->paused = false;
+        if (operation->pauseTimer)
+            operation->pauseTimer->stop();
+        notifyOperationsChanged();
+        return true;
+    }
+#endif
+    return false;
 }
 
-void FileOperation::onTotalSize(KJob *, qulonglong size)
+bool FileOperation::moveOperation(int id, int direction)
 {
-    setTotalBytes(size);
-    if (size > 0)
-        setProgress(static_cast<int>((static_cast<double>(m_processedBytes) / static_cast<double>(size)) * 100.0));
+    if (direction == 0)
+        return false;
+
+    Operation *operation = findOperation(id);
+    if (!operation || operation->started || operation->finished)
+        return false;
+
+    const int index = m_operations.indexOf(operation);
+    const int targetIndex = index + (direction < 0 ? -1 : 1);
+    if (index < 0 || targetIndex < 0 || targetIndex >= m_operations.size())
+        return false;
+
+    Operation *target = m_operations.at(targetIndex);
+    if (target->started || target->finished)
+        return false;
+
+    m_operations.swapItemsAt(index, targetIndex);
+    notifyOperationsChanged();
+    return true;
 }
 
-void FileOperation::onSpeed(KJob *, unsigned long bytesPerSecond)
+
+bool FileOperation::moveOperationTo(int id, int targetId)
 {
-    setSpeed(bytesPerSecond);
+    if (id == targetId)
+        return false;
+
+    Operation *operation = findOperation(id);
+    Operation *target = findOperation(targetId);
+    if (!operation || !target || operation->started || operation->finished || target->started || target->finished)
+        return false;
+
+    const int index = m_operations.indexOf(operation);
+    const int targetIndex = m_operations.indexOf(target);
+    if (index < 0 || targetIndex < 0)
+        return false;
+
+    m_operations.move(index, targetIndex);
+    notifyOperationsChanged();
+    return true;
+}
+
+void FileOperation::resolveConflict(int id, bool replace)
+{
+    Operation *operation = findOperation(id);
+    if (!operation || operation->active || !operation->conflictPending)
+        return;
+
+    if (!replace)
+    {
+        cancelOperation(id);
+        return;
+    }
+
+    operation->overwriteExisting = true;
+    operation->conflictPending = false;
+    operation->conflictSource.clear();
+    operation->conflictDestination.clear();
+    notifyOperationsChanged();
+    startPendingOperations();
+}
+
+#ifdef KIO_AVAILABLE
+void FileOperation::onPercent(KJob *job, unsigned long percent)
+{
+    for (auto *operation : std::as_const(m_operations))
+    {
+        if (operation->job == job)
+        {
+            operation->progress = static_cast<int>(percent);
+            notifyOperationsChanged();
+            return;
+        }
+    }
+}
+
+void FileOperation::onProcessedSize(KJob *job, qulonglong size)
+{
+    for (auto *operation : std::as_const(m_operations))
+    {
+        if (operation->job == job)
+        {
+            operation->processedBytes = size;
+            if (operation->totalBytes > 0)
+                operation->progress = static_cast<int>((static_cast<double>(size) / static_cast<double>(operation->totalBytes)) * 100.0);
+            notifyOperationsChanged();
+            return;
+        }
+    }
+}
+
+void FileOperation::onTotalSize(KJob *job, qulonglong size)
+{
+    for (auto *operation : std::as_const(m_operations))
+    {
+        if (operation->job == job)
+        {
+            operation->totalBytes = size;
+            if (size > 0)
+                operation->progress = static_cast<int>((static_cast<double>(operation->processedBytes) / static_cast<double>(size)) * 100.0);
+            notifyOperationsChanged();
+            return;
+        }
+    }
+}
+
+void FileOperation::onSpeed(KJob *job, unsigned long speed)
+{
+    for (auto *operation : std::as_const(m_operations))
+    {
+        if (operation->job == job)
+        {
+            operation->speed = speed;
+            notifyOperationsChanged();
+            return;
+        }
+    }
 }
 #endif
 
@@ -708,20 +1277,4 @@ void FileOperation::setPauseSupported(bool supported)
 
     m_pauseSupported = supported;
     Q_EMIT pauseSupportedChanged();
-}
-
-void FileOperation::reset()
-{
-    m_operation.clear();
-    m_destination.clear();
-    m_sourceName.clear();
-    setPauseSupported(false);
-#ifdef KIO_AVAILABLE
-    m_localSourceUrl.clear();
-    m_localDestinationPath.clear();
-    m_localTemporaryPath.clear();
-#endif
-    Q_EMIT operationChanged();
-    Q_EMIT destinationChanged();
-    Q_EMIT sourceNameChanged();
 }

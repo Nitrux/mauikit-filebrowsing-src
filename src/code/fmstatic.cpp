@@ -288,15 +288,9 @@ bool FMStatic::cut(const QList<QUrl> &urls, const QUrl &where, const QString &na
     if (!name.isEmpty())
         _where = QUrl(where.toString() + QStringLiteral("/") + name);
     
-    auto job = KIO::move(urls, _where, KIO::HideProgressInfo);
-    QObject::connect(job, &KJob::result, job, [job, urls, _where]() {
-        qDebug() << "FMStatic::cut result"
-                 << "urls" << urls
-                 << "destination" << _where
-                 << "error" << job->error()
-                 << "errorText" << job->errorString();
-    });
-    job->start();
+    const bool started = FileOperation::startMove(urls, _where, QStringLiteral("paste"));
+    if (!started)
+        return false;
 
     for (const auto &url : urls) {
         QUrl where_ = QUrl(where.toString() + QStringLiteral("/") + FMStatic::getFileInfoModel(url)[FMH::MODEL_KEY::LABEL]);
@@ -352,8 +346,7 @@ bool FMStatic::removeFiles(const QList<QUrl> &urls)
 void FMStatic::moveToTrash(const QList<QUrl> &urls)
 {
 #ifdef KIO_AVAILABLE
-    auto job = KIO::trash(urls);
-    job->start();
+    FileOperation::startTrash(urls);
 #else
     Q_UNUSED(urls)
 #endif
