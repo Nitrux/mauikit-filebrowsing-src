@@ -356,6 +356,11 @@ Maui.Page
      */
     property alias readOnly : _browser.readOnly
 
+    /**
+     * @brief Whether delete operations should move items to the trash when supported.
+     * @property bool FileBrowser::deleteToTrash
+     */
+    property bool deleteToTrash: true
 
     /**
      * @brief Emitted when an item has been clicked.
@@ -551,10 +556,45 @@ Maui.Page
         {
             id: _removeDialog
 
-            property double freedSpace : calculateFreedSpace(urls)
-
             title: i18nd("mauikitfilebrowsing", "Delete")
-            message: i18nd("mauikitfilebrowsing", "Delete %1  \nTotal freed space %2", (Maui.Handy.isLinux ? "or move to trash?" : "? This action can not be undone."),  Maui.Handy.formatSize(freedSpace))
+            showList: urls.length > 1
+
+            function buildDeleteMessage(items)
+            {
+                const count = items ? items.length : 0
+                const moveToTrash = control.deleteToTrash && Maui.Handy.isLinux
+
+                if (count === 1)
+                {
+                    const item = FB.FM.getFileInfo(items[0])
+                    const name = item && item.label ? item.label : String(items[0])
+
+                    return moveToTrash
+                            ? i18nd("mauikitfilebrowsing", "Are you sure you want to move “%1” to Trash?\n", name)
+                            : i18nd("mauikitfilebrowsing", "Are you sure you want to delete “%1”?\n", name)
+                }
+
+                return moveToTrash
+                        ? i18nd("mauikitfilebrowsing", "Are you sure you want to move the %1 selected items to Trash?\n", count)
+                        : i18nd("mauikitfilebrowsing", "Are you sure you want to delete the %1 selected items?\n", count)
+            }
+
+            message: buildDeleteMessage(urls)
+            template.iconSource: "user-trash"
+            template.imageSource: ""
+            template.iconComponent: Item
+            {
+                Maui.GridItemTemplate
+                {
+                    anchors.fill: parent
+                    iconSizeHint: Maui.Style.iconSizes.large
+                    iconSource: "user-trash"
+                    imageSource: ""
+                }
+            }
+
+            template.label2.color: Maui.Theme.textColor
+            template.label2.opacity: 1
             onClosed:
             {
                 control.restoreBrowserFocus()
@@ -569,37 +609,18 @@ Maui.Page
 
                 Action
                 {
-                    text: i18nd("mauikitfilebrowsing", "Delete")
-                    Maui.Controls.status: Maui.Controls.Negative
+                    text: i18nd("mauikitfilebrowsing", control.deleteToTrash && Maui.Handy.isLinux ? "Trash" : "Delete")
+                    Maui.Controls.status: control.deleteToTrash && Maui.Handy.isLinux ? Maui.Controls.Neutral : Maui.Controls.Negative
                     onTriggered:
                     {
-                        control.currentFMList.removeFiles(urls)
-                        close()
-                    }
-                },
-                Action
-                {
-                    text: i18nd("mauikitfilebrowsing", "Trash")
-                    Maui.Controls.status: Maui.Controls.Neutral
-                    enabled: Maui.Handy.isLinux
-                    onTriggered:
-                    {
-                        control.currentFMList.moveToTrash(urls)
+                        if (control.deleteToTrash && Maui.Handy.isLinux)
+                            control.currentFMList.moveToTrash(urls)
+                        else
+                            control.currentFMList.removeFiles(urls)
                         close()
                     }
                 }
             ]
-
-            function calculateFreedSpace(urls)
-            {
-                var size = 0
-                for(var url of urls)
-                {
-                    size += parseFloat(FB.FM.getFileInfo(url).size)
-                }
-
-                return size
-            }
         }
     }
 
@@ -677,7 +698,7 @@ Maui.Page
                 control.restoreBrowserFocus()
                 destroy()
             }
-            // title: i18nd("mauikitfilebrowsing", "Rename")
+            title: i18nd("mauikitfilebrowsing", "Rename")
             message: i18nd("mauikitfilebrowsing", "Enter the new name for the file.")
 
             template.iconSource: item.icon

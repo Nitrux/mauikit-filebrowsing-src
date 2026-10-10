@@ -348,104 +348,121 @@ Maui.PopupPage
         ListModel { id: activeModel }
         ListModel { id: waitingModel }
 
-        Rectangle
+        Maui.ScrollColumn
         {
-            id: activeSection
+            id: activeOperationsScroll
             visible: activeModel.count > 0
-            color: Maui.Theme.backgroundColor
-            clip: true
-            z: 1
             Layout.fillWidth: true
-            Layout.preferredHeight: activeContent.implicitHeight + Maui.Style.space.small * 2
-            implicitHeight: activeContent.implicitHeight + Maui.Style.space.small * 2
+            Layout.fillHeight: true
+            Layout.minimumHeight: 0
+            Layout.preferredHeight: activeSection.implicitHeight
+            padding: 0
+            topPadding: Maui.Style.space.small
+            bottomPadding: Maui.Style.space.small
+            spacing: Maui.Style.space.small
+            clip: true
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            flickable.interactive: true
 
-            ColumnLayout
+            Rectangle
             {
-                id: activeContent
-                anchors.fill: parent
-                anchors.margins: Maui.Style.space.small
-                spacing: Maui.Style.space.small
+                id: activeSection
+                visible: activeModel.count > 0
+                color: Maui.Theme.backgroundColor
+                clip: true
+                z: 1
+                Layout.fillWidth: true
+                Layout.preferredHeight: activeContent.implicitHeight + Maui.Style.space.small * 2
+                implicitHeight: activeContent.implicitHeight + Maui.Style.space.small * 2
 
-                Repeater
+                ColumnLayout
                 {
-                    model: activeModel
+                    id: activeContent
+                    anchors.fill: parent
+                    anchors.margins: Maui.Style.space.small
+                    spacing: Maui.Style.space.small
 
-                    delegate: ColumnLayout
+                    Repeater
                     {
-                        required property var operationData
-                        Layout.fillWidth: true
-                        Layout.topMargin: Maui.Style.space.small
-                        Layout.bottomMargin: Maui.Style.space.small
-                        spacing: Maui.Style.space.small
+                        model: activeModel
 
-                        Maui.ListItemTemplate
+                        delegate: ColumnLayout
                         {
+                            required property var operationData
                             Layout.fillWidth: true
-                            text1: control.operationTitle(operationData)
-                            text2: control.operationDestination(operationData)
-                            text3: control.operationStatus(operationData)
-                            iconVisible: false
-                            iconSizeHint: Maui.Style.iconSizes.medium
-                            label3.font: Maui.Style.defaultFont
-                            label3.opacity: 1
-                        }
+                            Layout.topMargin: Maui.Style.space.small
+                            Layout.bottomMargin: Maui.Style.space.small
+                            spacing: Maui.Style.space.small
 
-                        RowLayout
-                        {
-                            Layout.fillWidth: true
-
-                            ProgressBar
+                            Maui.ListItemTemplate
                             {
-                                visible: operationData.totalBytes > 0
                                 Layout.fillWidth: true
-                                from: 0
-                                to: 100
-                                value: operationData.progress
+                                text1: control.operationTitle(operationData)
+                                text2: control.operationDestination(operationData)
+                                text3: control.operationStatus(operationData)
+                                iconVisible: false
+                                iconSizeHint: Maui.Style.iconSizes.medium
+                                label3.font: Maui.Style.defaultFont
+                                label3.opacity: 1
                             }
 
-                            ToolButton
+                            RowLayout
                             {
-                                visible: operationData.pauseSupported
-                                enabled: operationData.active
-                                display: ToolButton.IconOnly
-                                icon.name: operationData.paused ? "media-playback-start" : "media-playback-pause"
-                                text: operationData.paused
-                                      ? i18nd("mauikitfilebrowsing", "Resume transfer")
-                                      : i18nd("mauikitfilebrowsing", "Pause transfer")
-                                onClicked: operationData.paused
-                                           ? FB.FileOperation.resumeOperation(operationData.id)
-                                           : FB.FileOperation.pauseOperation(operationData.id)
-                                ToolTip.visible: hovered
-                                ToolTip.text: text
+                                Layout.fillWidth: true
+
+                                ProgressBar
+                                {
+                                    visible: operationData.totalBytes > 0
+                                    Layout.fillWidth: true
+                                    from: 0
+                                    to: 100
+                                    value: operationData.progress
+                                }
+
+                                ToolButton
+                                {
+                                    visible: operationData.pauseSupported
+                                    enabled: operationData.active
+                                    display: ToolButton.IconOnly
+                                    icon.name: operationData.paused ? "media-playback-start" : "media-playback-pause"
+                                    text: operationData.paused
+                                          ? i18nd("mauikitfilebrowsing", "Resume transfer")
+                                          : i18nd("mauikitfilebrowsing", "Pause transfer")
+                                    onClicked: operationData.paused
+                                               ? FB.FileOperation.resumeOperation(operationData.id)
+                                               : FB.FileOperation.pauseOperation(operationData.id)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                }
+
+                                ToolButton
+                                {
+                                    visible: operationData.canCancel
+                                    enabled: operationData.canCancel
+                                    display: ToolButton.IconOnly
+                                    icon.name: operationData.active ? "dialog-cancel" : "edit-clear"
+                                    text: operationData.active
+                                          ? i18nd("mauikitfilebrowsing", "Cancel transfer")
+                                          : i18nd("mauikitfilebrowsing", "Cancel queued transfer")
+                                    onClicked: FB.FileOperation.cancelOperation(operationData.id)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                }
                             }
 
-                            ToolButton
+                            Label
                             {
-                                visible: operationData.canCancel
-                                enabled: operationData.canCancel
-                                display: ToolButton.IconOnly
-                                icon.name: operationData.active ? "dialog-cancel" : "edit-clear"
-                                text: operationData.active
-                                      ? i18nd("mauikitfilebrowsing", "Cancel transfer")
-                                      : i18nd("mauikitfilebrowsing", "Cancel queued transfer")
-                                onClicked: FB.FileOperation.cancelOperation(operationData.id)
-                                ToolTip.visible: hovered
-                                ToolTip.text: text
+                                Layout.fillWidth: true
+                                text: control.operationDetails(operationData)
+                                elide: Text.ElideRight
                             }
-                        }
 
-                        Label
-                        {
-                            Layout.fillWidth: true
-                            text: control.operationDetails(operationData)
-                            elide: Text.ElideRight
-                        }
-
-                        Maui.Separator
-                        {
-                            visible: index < activeModel.count - 1
-                            Layout.fillWidth: true
-                            weight: Maui.Separator.Weight.Light
+                            Maui.Separator
+                            {
+                                visible: index < activeModel.count - 1
+                                Layout.fillWidth: true
+                                weight: Maui.Separator.Weight.Light
+                            }
                         }
                     }
                 }

@@ -91,6 +91,11 @@ Maui.PopupPage
          * @brief The body of the message. This will go right under the title.
          */
         property string message : ""
+
+        /**
+         *  Whether to display the file listing section.
+         */
+        property bool showList: true
         
         /**
          * @brief This is a information map of the first file in the `urls` list. It is used to display a miniature image in the dialog information section.
@@ -216,14 +221,12 @@ Maui.PopupPage
             iconVisible: true
             iconSource: item.icon
             imageSource: item.thumbnail
-            iconSizeHint: Maui.Style.iconSizes.medium
+            iconSizeHint: Maui.Style.iconSizes.small
             
             ToolButton
             {
                 //text: i18nd("mauikit", "Clear")
                 icon.name: "edit-clear"
-                icon.width: Maui.Style.iconSizes.small
-                icon.height: Maui.Style.iconSizes.small
                 
                 onClicked:
                 {
@@ -244,25 +247,41 @@ Maui.PopupPage
             }
         }
         
-        Loader
+        Rectangle
         {
-            id: _listViewLoader
-            
-            asynchronous: false
-            active: control.urls.length > 0
-            visible: active
-            
+            id: _listContainer
+            visible: control.showList && control.urls.length > 0
             Layout.fillWidth: true
-            
-            sourceComponent: Maui.ListBrowser
+            implicitHeight: _listViewLoader.implicitHeight
+            Layout.preferredHeight: implicitHeight
+            color: Maui.Theme.alternateBackgroundColor
+            radius: Maui.Style.radiusV
+            border.color: Maui.Theme.highlightColor
+            border.width: 1
+            clip: true
+
+            Loader
             {
-                clip: true
-                implicitHeight: Math.min(contentHeight, 300)
-                model: urls
-                spacing: Maui.Style.defaultSpacing
-                padding: 0
-                
-                delegate: control.listDelegate
+                id: _listViewLoader
+
+                asynchronous: false
+                active: control.showList && control.urls.length > 0
+                visible: active
+
+                anchors.fill: parent
+
+                sourceComponent: Maui.ListBrowser
+                {
+                    clip: true
+                    implicitHeight: Math.min(contentHeight, 300)
+                    model: urls
+                    spacing: Maui.Style.defaultSpacing
+                    leftPadding: Maui.Style.contentMargins
+                    rightPadding: Maui.Style.contentMargins
+                    verticalScrollBarPolicy: ScrollBar.AlwaysOff
+
+                    delegate: control.listDelegate
+                }
             }
         }
 }
