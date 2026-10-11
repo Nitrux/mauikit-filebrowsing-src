@@ -124,6 +124,7 @@ private:
     bool hasActiveConflict(const Operation *operation) const;
 
 #ifdef KIO_AVAILABLE
+    bool checkLocalMoveConflict(Operation *operation);
     bool startLocalCopy(Operation *operation);
     bool prepareLocalCopySource(Operation *operation);
     void processLocalCopy(Operation *operation);

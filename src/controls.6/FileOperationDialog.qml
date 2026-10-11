@@ -18,9 +18,11 @@ Maui.PopupPage
 
     property Item anchorItem: null
     property int anchorMargin: Maui.Style.space.medium
+    property bool positionUpdatePending: false
     property int dialogItemThreshold: 2
     property int dialogSizeThreshold: 1024 * 1024
     property int dialogOpenDelay: Maui.Style.units.longDuration * 2
+    property string lastSummaryText: ""
 
     Component.onCompleted: synchronizeOperationModels()
 
@@ -141,10 +143,25 @@ Maui.PopupPage
 
         conflictDialog.operationId = conflict.id
         conflictDialog.conflictDestination = conflict.conflictDestination
+        conflictDialog.conflictKind = conflict.operation === "rename" ? "move" : conflict.kind
         if (!control.visible)
             control.open()
         if (!conflictDialog.visible)
             conflictDialog.open()
+    }
+
+    function schedulePosition()
+    {
+        if (!control.visible || control.positionUpdatePending || FB.FileOperation.operationCount === 0)
+            return
+
+        control.positionUpdatePending = true
+        Qt.callLater(function()
+        {
+            control.positionUpdatePending = false
+            if (control.visible && FB.FileOperation.operationCount > 0)
+                control.positionNextToAnchor()
+        })
     }
 
     function positionNextToAnchor()
@@ -153,7 +170,8 @@ Maui.PopupPage
             return
 
         const margin = control.anchorMargin
-        if (!control.anchorItem)
+        if (!control.anchorItem || !control.anchorItem.visible
+                || control.anchorItem.width <= 0 || control.anchorItem.height <= 0)
         {
             control.x = Math.max(margin, (control.parent.width - control.width) / 2)
             control.y = Math.max(margin, (control.parent.height - control.height) / 2)
@@ -316,26 +334,33 @@ Maui.PopupPage
         }
     }
 
-    onOpened: Qt.callLater(positionNextToAnchor)
-    onWidthChanged: if (visible) positionNextToAnchor()
-    onHeightChanged: if (visible) positionNextToAnchor()
+    onAboutToShow: positionNextToAnchor()
+    onOpened: schedulePosition()
+    onClosed:
+    {
+        control.synchronizeOperationModels()
+        control.lastSummaryText = ""
+    }
+    onWidthChanged: schedulePosition()
+    onHeightChanged: schedulePosition()
 
     Connections
     {
         target: control.anchorItem
 
-        function onXChanged() { if (control.visible) control.positionNextToAnchor() }
-        function onYChanged() { if (control.visible) control.positionNextToAnchor() }
-        function onWidthChanged() { if (control.visible) control.positionNextToAnchor() }
-        function onHeightChanged() { if (control.visible) control.positionNextToAnchor() }
+        function onXChanged() { control.schedulePosition() }
+        function onYChanged() { control.schedulePosition() }
+        function onVisibleChanged() { control.schedulePosition() }
+        function onWidthChanged() { control.schedulePosition() }
+        function onHeightChanged() { control.schedulePosition() }
     }
 
     Connections
     {
         target: control.parent
 
-        function onWidthChanged() { if (control.visible) control.positionNextToAnchor() }
-        function onHeightChanged() { if (control.visible) control.positionNextToAnchor() }
+        function onWidthChanged() { control.schedulePosition() }
+        function onHeightChanged() { control.schedulePosition() }
     }
 
     stack: ColumnLayout
@@ -343,6 +368,7 @@ Maui.PopupPage
         Layout.fillWidth: true
         Layout.fillHeight: true
         Layout.margins: Maui.Style.space.big
+        Layout.topMargin: Maui.Style.space.medium
         spacing: Maui.Style.space.small
 
         ListModel { id: activeModel }
@@ -471,13 +497,13 @@ Maui.PopupPage
 
         RowLayout
         {
-            visible: FB.FileOperation.activeCount > 0 || FB.FileOperation.queuedCount > 0
+            visible: FB.FileOperation.activeCount > 0 || FB.FileOperation.queuedCount > 0 || control.lastSummaryText.length > 0
             Layout.fillWidth: true
 
             Label
             {
                 Layout.fillWidth: true
-                text: control.summaryText()
+                text: FB.FileOperation.operationCount > 0 ? control.summaryText() : control.lastSummaryText
             }
 
             ToolButton
@@ -503,7 +529,7 @@ Maui.PopupPage
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumHeight: 0
-            Layout.preferredHeight: 0
+            Layout.preferredHeight: implicitHeight
             padding: 0
             topPadding: Maui.Style.space.small
             bottomPadding: Maui.Style.space.small
@@ -682,9 +708,12 @@ Maui.PopupPage
         id: conflictDialog
         property int operationId: -1
         property string conflictDestination: ""
+        property string conflictKind: ""
 
         title: i18nd("mauikitfilebrowsing", "Replace")
-        message: i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.\n\nReplace it with the file you’re copying?", control.conflictItemName(conflictDestination))
+        message: conflictKind === "move"
+                ? i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.\n\nReplace it with the file you’re moving?", control.conflictItemName(conflictDestination))
+                : i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.\n\nReplace it with the file you’re copying?", control.conflictItemName(conflictDestination))
         template.iconSource: "dialog-warning"
         standardButtons: Dialog.Cancel | Dialog.Ok
 
@@ -720,20 +749,28 @@ Maui.PopupPage
 
         function onOperationAdded()
         {
-            control.scheduleDialogOpen()
+            Qt.callLater(control.scheduleDialogOpen)
         }
 
         function onOperationsChanged()
         {
-            control.synchronizeOperationModels()
-            control.synchronizeConflictDialog()
             if (FB.FileOperation.operationCount === 0)
             {
                 dialogOpenTimer.stop()
+                control.synchronizeConflictDialog()
                 if (control.visible)
+                {
                     control.close()
+                    return
+                }
+
+                control.synchronizeOperationModels()
                 return
             }
+
+            control.synchronizeOperationModels()
+            control.synchronizeConflictDialog()
+            control.lastSummaryText = control.summaryText()
 
             if (!control.visible && dialogOpenTimer.running && control.dialogShouldOpenImmediately())
             {
@@ -743,7 +780,7 @@ Maui.PopupPage
             }
 
             if (control.visible)
-                Qt.callLater(control.positionNextToAnchor)
+                control.schedulePosition()
         }
 
         function onFinished(success)

@@ -70,6 +70,7 @@ public:
 
 protected:
     void setList();
+    void scheduleSetList();
 
 public Q_SLOTS:
     /**
@@ -150,6 +151,7 @@ private:
     QVariantList groups;
 
     QHash<QString, QModelIndex> m_devices;
+    bool listUpdatePending = false;
 
     FMH::MODEL_LIST getGroup(const KFilePlacesModel &model, const FMStatic::PATHTYPE_KEY &type);
 

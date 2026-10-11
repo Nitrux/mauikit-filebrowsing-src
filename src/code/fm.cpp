@@ -35,6 +35,7 @@
 #include <KFileItem>
 #include <KFilePlacesModel>
 #include <KIO/CopyJob>
+#include <KIO/Job>
 #include <KIO/DeleteJob>
 #include <KIO/MkdirJob>
 #include <KIO/SimpleJob>
@@ -226,6 +227,11 @@ FM::FM(QObject *parent)
     this->dirLister->setDelayedMimeTypes(false);
     this->dirLister->setRequestMimeTypeWhileListing(true);
     this->dirLister->setAutoUpdate(true);
+    this->dirLister->setAutoErrorHandlingEnabled(false);
+    connect(dirLister, &KCoreDirLister::jobError, this, [this](KIO::Job *job) {
+        if (job)
+            Q_EMIT this->warningMessage(job->errorString());
+    });
 
     const static auto packItems = [](const KFileItemList &items) -> FMH::MODEL_LIST {
         return std::accumulate(items.constBegin(), items.constEnd(), FMH::MODEL_LIST(), [](FMH::MODEL_LIST &res, const KFileItem &item) -> FMH::MODEL_LIST {

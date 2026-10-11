@@ -24,6 +24,7 @@
 #include <QDBusConnection>
 #include <QIcon>
 #include <QSettings>
+#include <QTimer>
 
 #ifdef KIO_AVAILABLE
 #include <KFilePlacesModel>
@@ -63,12 +64,12 @@ PlacesList::PlacesList(QObject *parent)
 #endif
 {    
 #ifdef KIO_AVAILABLE
-    connect(this->model, &KFilePlacesModel::reloaded, this, &PlacesList::setList);
+    connect(this->model, &KFilePlacesModel::reloaded, this, &PlacesList::scheduleSetList);
     
-    connect(this->model, &KFilePlacesModel::setupDone, this, &PlacesList::setList);
+    connect(this->model, &KFilePlacesModel::setupDone, this, &PlacesList::scheduleSetList);
 
     connect(this->model, &KFilePlacesModel::teardownDone, this, [this](const QModelIndex &, Solid::ErrorType, const QVariant &) {
-        this->setList();
+        this->scheduleSetList();
     });
 
     connect(this->model, &KFilePlacesModel::errorMessage, this, [this](const QString &message) {
@@ -77,7 +78,7 @@ PlacesList::PlacesList(QObject *parent)
     
     connect(this->model, &KFilePlacesModel::rowsInserted, [this](const QModelIndex, int, int) 
             {
-                this->setList();
+                this->scheduleSetList();
                 Q_EMIT this->bookmarksChanged();
 
                 /*Q_EMIT this->preListChanged();
@@ -105,8 +106,8 @@ PlacesList::PlacesList(QObject *parent)
 
 void PlacesList::componentComplete()
 {
-    connect(this, &PlacesList::groupsChanged, this, &PlacesList::setList);
-    this->setList();
+    connect(this, &PlacesList::groupsChanged, this, &PlacesList::scheduleSetList);
+    this->scheduleSetList();
 }
 
 const FMH::MODEL_LIST &PlacesList::items() const
@@ -195,6 +196,19 @@ FMH::MODEL_LIST PlacesList::getGroup(const KFilePlacesModel &model, const FMStat
 #endif
     
     return res;
+}
+
+void PlacesList::scheduleSetList()
+{
+    if (this->listUpdatePending)
+        return;
+
+    this->listUpdatePending = true;
+    QTimer::singleShot(0, this, [this]()
+    {
+        this->listUpdatePending = false;
+        this->setList();
+    });
 }
 
 void PlacesList::setList()

@@ -3,11 +3,6 @@
 #include <QNetworkReply>
 #include <QFile>
 
-// #if defined Q_OS_LINUX && !defined Q_OS_ANDROID
-// #include <KIO/CopyJob>
-// #include <KJob>
-// #endif
-
 // QNetworkAccessManager *FMH::Downloader::manager = new QNetworkAccessManager(); 
 
 FMH::Downloader::Downloader(QObject *parent)
@@ -95,36 +90,15 @@ void FMH::Downloader::stop()
 
 void FMH::Downloader::downloadFile(const QUrl &source, const QUrl &destination)
 {
-    #ifdef KIO_COPYJOB_H
-    KIO::CopyJob *downloadJob = KIO::copy(source, destination);
-    
-    connect(downloadJob, &KIO::CopyJob::warning, [=](KJob *job, QString message)
-    {
-        Q_UNUSED(job)
-        Q_EMIT this->warning(message);
-    });
-    
-    connect(downloadJob, &KIO::CopyJob::processedSize, [=](KJob *job, qulonglong size)
-    {
-        Q_EMIT this->progress(size, job->percent());
-    });
-    
-    connect(downloadJob, &KIO::CopyJob::finished, [=](KJob *job) 
-    {
-        Q_EMIT this->downloadReady();
-        Q_EMIT this->done();
-    });
-    
-    #else
     if (destination.isEmpty() || source.isEmpty())
         return;
-    
+
     QNetworkRequest request;
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, true);
     request.setUrl(source);
-    
+
     m_saveToFile = true;
-    
+
     file = new QFile;
     file->setFileName(destination.toLocalFile());
     if (!file->open(QIODevice::WriteOnly))
@@ -132,11 +106,9 @@ void FMH::Downloader::downloadFile(const QUrl &source, const QUrl &destination)
         Q_EMIT this->warning(QStringLiteral("Can not open file to write download"));
         return;
     }
-    
-    this->reply = manager->get(request);    
+
+    this->reply = manager->get(request);
     this->setConnections();
-    
-    #endif
 }
 
 void FMH::Downloader::getArray(const QUrl &fileURL, const QMap<QString, QString> &headers)

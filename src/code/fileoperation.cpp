@@ -5,6 +5,8 @@
 #ifdef KIO_AVAILABLE
 #include <KIO/CopyJob>
 #include <KIO/DeleteJob>
+#include <KIO/Global>
+#include <KIO/Job>
 #include <KJob>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -48,6 +50,16 @@ void suspendKioCopyJob(KJob *job)
 {
     if (job)
         job->suspend();
+}
+
+void disableKioUi(KJob *job)
+{
+    if (!job)
+        return;
+
+    job->setUiDelegate(nullptr);
+    if (auto *kioJob = qobject_cast<KIO::Job *>(job))
+        kioJob->setUiDelegateExtension(nullptr);
 }
 #endif
 
@@ -260,15 +272,22 @@ bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
         }
     }
 
+    if (operation->kind == QStringLiteral("move") && checkLocalMoveConflict(operation))
+        return false;
+
+    KIO::JobFlags flags = KIO::HideProgressInfo;
+    if (operation->overwriteExisting)
+        flags |= KIO::Overwrite;
+
     KJob *job = nullptr;
     if (operation->kind == QStringLiteral("delete"))
         job = KIO::del(operation->urls, KIO::HideProgressInfo);
     else if (operation->kind == QStringLiteral("trash"))
         job = KIO::trash(operation->urls, KIO::HideProgressInfo);
     else if (operation->kind == QStringLiteral("move"))
-        job = KIO::move(operation->urls, operation->destinationUrl, KIO::HideProgressInfo);
+        job = KIO::move(operation->urls, operation->destinationUrl, flags);
     else
-        job = KIO::copy(operation->urls, operation->destinationUrl, KIO::HideProgressInfo);
+        job = KIO::copy(operation->urls, operation->destinationUrl, flags);
 
     if (!job)
     {
@@ -276,6 +295,8 @@ bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
             *errorMessage = QStringLiteral("Could not create the file operation");
         return false;
     }
+
+    disableKioUi(job);
 
     operation->job = job;
     operation->started = true;
@@ -316,6 +337,54 @@ bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
 }
 
 #ifdef KIO_AVAILABLE
+bool FileOperation::checkLocalMoveConflict(Operation *operation)
+{
+    if (!operation || operation->kind != QStringLiteral("move") || operation->urls.isEmpty()
+            || !operation->destinationUrl.isLocalFile())
+        return false;
+
+    if (operation->operation == QStringLiteral("rename"))
+    {
+        if (operation->urls.size() != 1 || !operation->urls.constFirst().isLocalFile())
+            return false;
+
+        const QFileInfo sourceInfo(operation->urls.constFirst().toLocalFile());
+        const QFileInfo destinationInfo(operation->destinationUrl.toLocalFile());
+        if (!sourceInfo.exists() || !destinationInfo.exists()
+                || QDir::cleanPath(sourceInfo.absoluteFilePath()) == QDir::cleanPath(destinationInfo.absoluteFilePath())
+                || operation->overwriteExisting)
+            return false;
+
+        operation->conflictPending = true;
+        operation->conflictDestination = operation->destinationUrl;
+        return true;
+    }
+
+    const QDir destinationDir(operation->destinationUrl.toLocalFile());
+    if (!destinationDir.exists())
+        return false;
+
+    for (const QUrl &url : operation->urls)
+    {
+        if (!url.isLocalFile())
+            return false;
+
+        const QFileInfo sourceInfo(url.toLocalFile());
+        if (!sourceInfo.exists())
+            return false;
+
+        const QFileInfo destinationInfo(destinationDir.filePath(sourceInfo.fileName()));
+        if (destinationInfo.exists() && !operation->overwriteExisting)
+        {
+            operation->conflictPending = true;
+            operation->conflictDestination = QUrl::fromLocalFile(destinationInfo.filePath());
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool FileOperation::startLocalCopy(Operation *operation)
 {
     if (operation->kind != QStringLiteral("copy") || operation->urls.isEmpty())
@@ -616,6 +685,40 @@ void FileOperation::finishKioOperation(Operation *operation, KJob *job)
         return;
 
     operation->job = nullptr;
+    const bool conflict = operation->kind != QStringLiteral("delete")
+            && operation->kind != QStringLiteral("trash")
+            && !operation->overwriteExisting
+            && job
+            && (job->error() == KIO::ERR_FILE_ALREADY_EXIST || job->error() == KIO::ERR_DIR_ALREADY_EXIST);
+    if (conflict)
+    {
+        operation->active = false;
+        operation->started = false;
+        operation->paused = false;
+        operation->pauseSupported = false;
+        operation->conflictPending = true;
+        operation->errorMessage.clear();
+
+        if (operation->operation == QStringLiteral("rename"))
+        {
+            operation->conflictDestination = operation->destinationUrl;
+        }
+        else if (!operation->urls.isEmpty())
+        {
+            QUrl destination = operation->destinationUrl;
+            QString path = destination.path();
+            if (!path.endsWith(QLatin1Char(47)))
+                path += QLatin1Char(47);
+            path += operation->urls.constFirst().fileName();
+            destination.setPath(path);
+            operation->conflictDestination = destination;
+        }
+
+        notifyOperationsChanged();
+        startPendingOperations();
+        return;
+    }
+
     const bool success = !operation->cancelRequested && job && job->error() == 0;
     finishOperation(operation, success, success ? QString() : (job ? job->errorString() : QString()));
 }
@@ -747,6 +850,9 @@ QList<QUrl> FileOperation::operationTargets(const Operation *operation) const
 
     if (operation->kind == QStringLiteral("delete") || operation->kind == QStringLiteral("trash"))
         return operation->urls;
+
+    if (operation->operation == QStringLiteral("rename"))
+        return {operation->destinationUrl};
 
 #ifdef KIO_AVAILABLE
     if (operation->active && !operation->localCopyDestinations.isEmpty())

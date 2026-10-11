@@ -23,11 +23,27 @@
 #include <KIO/EmptyTrashJob>
 #include <KIO/MkdirJob>
 #include <KIO/SimpleJob>
+#include <KIO/Job>
 #include <KIO/OpenUrlJob>
 #include <KApplicationTrader>
 #include <KIO/PreviewJob>
 #include <KFileItem>
 #include <KJob>
+#endif
+
+#ifdef KIO_AVAILABLE
+namespace
+{
+void disableKioUi(KJob *job)
+{
+    if (!job)
+        return;
+
+    job->setUiDelegate(nullptr);
+    if (auto *kioJob = qobject_cast<KIO::Job *>(job))
+        kioJob->setUiDelegateExtension(nullptr);
+}
+}
 #endif
 
 QString FMStatic::PathTypeLabel(const FMStatic::PATHTYPE_KEY& key)
@@ -356,6 +372,7 @@ QObject *FMStatic::emptyTrash()
 {
 #ifdef KIO_AVAILABLE
     auto job = KIO::emptyTrash();
+    disableKioUi(job);
     job->start();
     return job;
 #else
@@ -408,6 +425,7 @@ bool FMStatic::createDir(const QUrl &path, const QString &name)
 {
 #ifdef KIO_AVAILABLE
     auto job = KIO::mkdir(name.isEmpty() ? path : QUrl(path.toString() + QStringLiteral("/") + name));
+    disableKioUi(job);
     job->start();
     return true;
 #else
@@ -432,6 +450,7 @@ bool FMStatic::createSymlink(const QUrl &path, const QUrl &where)
 #ifdef KIO_AVAILABLE
     qDebug() << "trying to create symlink" << path << where;
     const auto job = KIO::link({path}, where);
+    disableKioUi(job);
     job->start();
     return true;
 #else
@@ -444,6 +463,7 @@ void FMStatic::openUrl(const QUrl &url)
 #ifdef KIO_AVAILABLE
     KIO::OpenUrlJob *job = new KIO::OpenUrlJob(url);
     job->setRunExecutables(true);
+    disableKioUi(job);
     job->start();
 #else
 

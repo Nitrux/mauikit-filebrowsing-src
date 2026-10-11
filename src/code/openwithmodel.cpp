@@ -4,6 +4,7 @@
 #include <KApplicationTrader>
 #include <KFileItem>
 #include <KIO/ApplicationLauncherJob>
+#include <KIO/Job>
 #include <KService>
 #endif
 
@@ -42,6 +43,9 @@ void OpenWithModel::openWith(const int& index)
 #ifdef KIO_AVAILABLE
     KService::Ptr service(new KService(this->m_list[index][FMH::MODEL_KEY::EXECUTABLE]));
     auto *job = new KIO::ApplicationLauncherJob(service, this);
+    job->setUiDelegate(nullptr);
+    if (auto *kioJob = qobject_cast<KIO::Job *>(job))
+        kioJob->setUiDelegateExtension(nullptr);
     job->setUrls(QUrl::fromStringList(m_urls));
     job->start();
 #endif

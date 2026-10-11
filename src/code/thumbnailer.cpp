@@ -80,6 +80,8 @@ AsyncImageResponse::AsyncImageResponse(const QString &id, const QSize &requested
     }
 
     m_job = new KIO::PreviewJob(KFileItemList() << KFileItem(sourceUrl), effectiveSize, &plugins);
+    m_job->setUiDelegate(nullptr);
+    m_job->setUiDelegateExtension(nullptr);
 
     connect(m_job, &KIO::PreviewJob::gotPreview, this, [this](KFileItem, QPixmap pixmap) {
         if (m_done)
