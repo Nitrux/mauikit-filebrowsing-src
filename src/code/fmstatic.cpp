@@ -588,14 +588,16 @@ static const QUrl thumbnailUrl(const QUrl &url, const QString &mimetype)
 #ifdef KIO_AVAILABLE
 const FMH::MODEL FMStatic::getFileInfo(const KFileItem &kfile)
 {
+    const auto itemUrl = kfile.url().scheme() == QStringLiteral("trash") ? kfile.url() : kfile.mostLocalUrl();
+
     return FMH::MODEL {
         {FMH::MODEL_KEY::LABEL, kfile.name()},
         {FMH::MODEL_KEY::NAME, kfile.name()},
         {FMH::MODEL_KEY::DATE, kfile.time(KFileItem::FileTimes::CreationTime).toString(Qt::TextDate)},
         {FMH::MODEL_KEY::MODIFIED, kfile.time(KFileItem::FileTimes::ModificationTime).toString(Qt::TextDate)},
         {FMH::MODEL_KEY::LAST_READ, kfile.time(KFileItem::FileTimes::AccessTime).toString(Qt::TextDate)},
-        {FMH::MODEL_KEY::PATH, kfile.mostLocalUrl().toString()},
-        {FMH::MODEL_KEY::URL, kfile.mostLocalUrl().toString()},
+        {FMH::MODEL_KEY::PATH, itemUrl.toString()},
+        {FMH::MODEL_KEY::URL, itemUrl.toString()},
         {FMH::MODEL_KEY::THUMBNAIL, thumbnailUrl(kfile.mostLocalUrl(), kfile.mimetype()).toString()},
         {FMH::MODEL_KEY::SYMLINK, kfile.linkDest()},
         {FMH::MODEL_KEY::IS_SYMLINK, QVariant(kfile.isLink()).toString()},

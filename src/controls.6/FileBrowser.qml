@@ -562,7 +562,7 @@ Maui.Page
             function buildDeleteMessage(items)
             {
                 const count = items ? items.length : 0
-                const moveToTrash = control.deleteToTrash && Maui.Handy.isLinux
+                const moveToTrash = control.deleteToTrash
 
                 if (count === 1)
                 {
@@ -609,11 +609,11 @@ Maui.Page
 
                 Action
                 {
-                    text: i18nd("mauikitfilebrowsing", control.deleteToTrash && Maui.Handy.isLinux ? "Trash" : "Delete")
-                    Maui.Controls.status: control.deleteToTrash && Maui.Handy.isLinux ? Maui.Controls.Neutral : Maui.Controls.Negative
+                    text: i18nd("mauikitfilebrowsing", control.deleteToTrash ? "Trash" : "Delete")
+                    Maui.Controls.status: control.deleteToTrash ? Maui.Controls.Neutral : Maui.Controls.Negative
                     onTriggered:
                     {
-                        if (control.deleteToTrash && Maui.Handy.isLinux)
+                        if (control.deleteToTrash)
                             control.currentFMList.moveToTrash(urls)
                         else
                             control.currentFMList.removeFiles(urls)

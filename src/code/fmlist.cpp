@@ -705,7 +705,7 @@ void FMList::moveToTrash(const QStringList& urls)
     if(m_readOnly)
         return;
 
-    FMStatic::moveToTrash(QUrl::fromStringList(urls));
+    FMStatic::moveToTrash(normalizeUrls(urls));
 }
 
 void FMList::removeFiles(const QStringList& urls)
