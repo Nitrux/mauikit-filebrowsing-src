@@ -51,7 +51,6 @@ void FileLoader::getFiles(QList<QUrl> paths, bool recursive, const QStringList &
 {
     uint count = 0; // total count
     uint i = 0; // count per batch
-    uint batch = 0; // batches count
     MODEL_LIST res;
     MODEL_LIST res_batch;
 
@@ -85,7 +84,6 @@ void FileLoader::getFiles(QList<QUrl> paths, bool recursive, const QStringList &
                 {
                     Q_EMIT itemsReady(res_batch, paths);
                     res_batch.clear();
-                    batch++;
                     i = 0;
                 }
                 
@@ -123,7 +121,6 @@ void FileLoader::getFiles(QList<QUrl> paths, bool recursive, const QStringList &
                 {
                     Q_EMIT itemsReady(res_batch, paths);
                     res_batch.clear();
-                    batch++;
                     i = 0;
                 }
 
