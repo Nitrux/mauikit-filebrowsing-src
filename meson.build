@@ -73,7 +73,7 @@ install_data(configure_file(
 install_subdir('src/controls.6', install_dir: qml_dir, strip_directory: true)
 install_headers(files('src/code/fm.h', 'src/code/fileoperation.h', 'src/code/fmstatic.h', 'src/code/fmlist.h', 'src/code/placeslist.h', 'src/code/downloader.h', 'src/code/fileloader.h', 'src/code/tagging.h', 'src/code/tagdb.h', 'src/code/moduleinfo.h') + [filebrowsing_export_header, filebrowsing_version_header], subdir: 'MauiKit4/FileBrowsing')
 pkg = import('pkgconfig')
-pkg.generate(lib, name: 'MauiKit File Browsing 4', filebase: 'MauiKitFileBrowsing4', version: meson.project_version(), description: 'MauiKit file browsing library', requires: 'MauiKit4 Qt6Concurrent Qt6Core Qt6DBus Qt6Network Qt6Qml Qt6Quick Qt6Sql Qt6Widgets Qt6Xml KF6CoreAddons KF6I18n')
+pkg.generate(lib, name: 'MauiKit File Browsing 4', filebase: 'MauiKitFileBrowsing4', version: meson.project_version(), description: 'MauiKit file browsing library', requires: 'MauiKit4 Qt6Concurrent Qt6Core Qt6DBus Qt6Network Qt6Qml Qt6Quick Qt6Sql Qt6Widgets Qt6Xml')
 
 cmake_targets = configure_file(
     input: 'meson-content.in',
