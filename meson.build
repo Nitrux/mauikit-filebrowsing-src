@@ -68,12 +68,12 @@ qml_dir = get_option('libdir') / 'qt6/qml/org/mauikit/filebrowsing'
 install_data(configure_file(
     input: 'meson-content.in',
     output: 'qmldir',
-    configuration: {'CONTENT': ('module org.mauikit.filebrowsing 1.3\nplugin MauiKitFileBrowsing4plugin\n')}
+    configuration: {'CONTENT': ('module org.mauikit.filebrowsing 1.3\ndepends org.mauikit.controls\nplugin MauiKitFileBrowsing4plugin\n')}
 ), install_dir: qml_dir)
 install_subdir('src/controls.6', install_dir: qml_dir, strip_directory: true)
 install_headers(files('src/code/fm.h', 'src/code/fileoperation.h', 'src/code/fmstatic.h', 'src/code/fmlist.h', 'src/code/placeslist.h', 'src/code/downloader.h', 'src/code/fileloader.h', 'src/code/tagging.h', 'src/code/tagdb.h', 'src/code/moduleinfo.h') + [filebrowsing_export_header, filebrowsing_version_header], subdir: 'MauiKit4/FileBrowsing')
 pkg = import('pkgconfig')
-pkg.generate(lib, name: 'MauiKit File Browsing 4', filebase: 'MauiKitFileBrowsing4', version: meson.project_version(), description: 'MauiKit file browsing library', requires: 'MauiKit4')
+pkg.generate(lib, name: 'MauiKit File Browsing 4', filebase: 'MauiKitFileBrowsing4', version: meson.project_version(), description: 'MauiKit file browsing library', requires: 'MauiKit4 Qt6Concurrent Qt6Core Qt6DBus Qt6Network Qt6Qml Qt6Quick Qt6Sql Qt6Widgets Qt6Xml KF6CoreAddons KF6I18n')
 
 cmake_targets = configure_file(
     input: 'meson-content.in',
@@ -83,7 +83,8 @@ if(NOT TARGET MauiKitFileBrowsing4)
   add_library(MauiKitFileBrowsing4 SHARED IMPORTED)
   set_target_properties(MauiKitFileBrowsing4 PROPERTIES
     IMPORTED_LOCATION "${_MAUIKIT_PREFIX}/@LIBDIR@/libMauiKitFileBrowsing4.so.4.0.5"
-    INTERFACE_INCLUDE_DIRECTORIES "${_MAUIKIT_PREFIX}/include/MauiKit4/FileBrowsing")
+    INTERFACE_INCLUDE_DIRECTORIES "${_MAUIKIT_PREFIX}/include/MauiKit4/FileBrowsing"
+    INTERFACE_LINK_LIBRARIES "Qt6::Concurrent;Qt6::Core;Qt6::DBus;Qt6::Network;Qt6::Qml;Qt6::Quick;Qt6::Sql;Qt6::Widgets;Qt6::Xml;KF6::CoreAddons;KF6::I18n;MauiKit4")
 endif()
 if(NOT TARGET MauiKit4::FileBrowsing)
   add_library(MauiKit4::FileBrowsing ALIAS MauiKitFileBrowsing4)
@@ -97,7 +98,9 @@ cmake_config = configure_file(
     input: 'meson-content.in',
     output: 'MauiKitFileBrowsing4Config.cmake',
     configuration: {'CONTENT': ('''include(CMakeFindDependencyMacro)
-find_dependency(Qt6 6.4 COMPONENTS Core)
+find_dependency(Qt6 6.4 COMPONENTS Concurrent Core DBus Network Qml Quick Sql Widgets Xml)
+find_dependency(KF6 6.13.0 COMPONENTS CoreAddons I18n)
+find_dependency(MauiKit4 4.0.5 CONFIG)
 include("${CMAKE_CURRENT_LIST_DIR}/MauiKitFileBrowsing4Targets.cmake")
 set(MauiKitFileBrowsing4_FOUND TRUE)
 ''')}
@@ -115,3 +118,20 @@ endif()
 ''')).replace('@VERSION@', (meson.project_version()))}
 )
 install_data([cmake_targets, cmake_config, cmake_version], install_dir: get_option('libdir') / 'cmake' / 'MauiKitFileBrowsing4')
+
+translation_domain = 'mauikitfilebrowsing'
+msgfmt = find_program('msgfmt')
+po_files = run_command('find', 'po', '-mindepth', '2', '-maxdepth', '2', '-type', 'f', '-name', translation_domain + '.po', check: true).stdout().strip().split('\n')
+foreach po_file : po_files
+    if po_file != ''
+        locale = po_file.split('/')[1]
+        custom_target(
+            'translation-' + locale,
+            input: po_file,
+            output: locale / (translation_domain + '.mo'),
+            command: [msgfmt, '--check', '-o', '@OUTPUT@', '@INPUT@'],
+            install: true,
+            install_dir: get_option('localedir') / locale / 'LC_MESSAGES',
+            install_tag: 'i18n')
+    endif
+endforeach
