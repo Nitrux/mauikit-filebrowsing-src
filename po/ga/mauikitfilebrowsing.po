@@ -472,9 +472,9 @@ msgid ""
 msgstr ""
 
 #: src/controls.6/OpenWithDialog.qml:74
-#, kde-format
+#, fuzzy, kde-format
 msgid "Open with"
-msgstr ""
+msgstr "Oscail le"
 
 #: src/controls.6/OpenWithDialog.qml:108 src/controls.6/TagsDialog.qml:216
 #, kde-format
