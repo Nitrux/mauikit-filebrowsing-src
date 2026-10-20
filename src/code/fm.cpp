@@ -272,7 +272,6 @@ FM::FM(QObject *parent)
     });
 
     connect(dirLister, static_cast<void (KCoreDirLister::*)(const QList<QPair<KFileItem, KFileItem>> &items)>(&KCoreDirLister::refreshItems), this, [&](QList<QPair<KFileItem, KFileItem>> items) {
-        qDebug() << "ITEMS WERE REFRESHED";
 
         const auto res = std::accumulate(
             items.constBegin(), items.constEnd(), QVector<QPair<FMH::MODEL, FMH::MODEL>>(), [](QVector<QPair<FMH::MODEL, FMH::MODEL>> &list, const QPair<KFileItem, KFileItem> &pair) -> QVector<QPair<FMH::MODEL, FMH::MODEL>> {
@@ -292,7 +291,6 @@ FM::FM(QObject *parent)
     });
 
     connect(dirLister, &QDirLister::refreshItems, this, [&](QVector<QPair<FMH::MODEL, FMH::MODEL>> items, QUrl) {
-        qDebug() << "ITEMS WERE REFRESHED";
         Q_EMIT this->pathContentItemsChanged(items);
     });
 
