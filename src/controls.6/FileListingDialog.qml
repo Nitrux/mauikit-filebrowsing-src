@@ -273,11 +273,12 @@ Maui.PopupPage
                 sourceComponent: Maui.ListBrowser
                 {
                     clip: true
-                    implicitHeight: Math.min(contentHeight, 300)
+                    implicitHeight: Math.min(contentHeight + topPadding + bottomPadding, 300)
                     model: urls
                     spacing: Maui.Style.defaultSpacing
                     leftPadding: Maui.Style.contentMargins
                     rightPadding: Maui.Style.contentMargins
+                    bottomPadding: Maui.Style.contentMargins
                     verticalScrollBarPolicy: ScrollBar.AlwaysOff
 
                     delegate: control.listDelegate

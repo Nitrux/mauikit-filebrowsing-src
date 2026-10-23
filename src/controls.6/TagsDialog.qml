@@ -52,6 +52,15 @@ Maui.PopupPage
 {
     id: control
 
+    title: i18nd("mauikitfilebrowsing", "Tags")
+
+    header: Maui.DialogHeader
+    {
+        width: parent ? parent.width : implicitWidth
+        title: control.title
+        onCloseRequested: control.close()
+    }
+
     /**
      * @brief An alias to the TagsList list/model controlling and listing all of the available tags.
      * @see TagsListmodel
@@ -102,28 +111,7 @@ Maui.PopupPage
             onTriggered: control.close()
         }
     ]
-    closeButtonVisible: false
-    headBar.visible: true
-    headBar.forceCenterMiddleContent: false
-    headBar.middleContent: Maui.TextField
-    {
-        id: tagText
-        Layout.fillWidth: true
-        Layout.maximumWidth: 500
-        placeholderText: i18nd("mauikitfilebrowsing", "Filter or add a new tag")
-        icon.source: "tag"
-        //             validator: RegExpValidator { regExp: /[0-9A-F]+/ }
-        onAccepted: //here we append a new tag to the model but we do not insert it into the DB until the user saves the tag to an url
-        {
-            control.commitPendingTags()
-        }
-
-        onTextChanged:
-        {
-            _tagsModel.filter = text
-        }
-    }
-
+    headBar.visible: false
     Maui.InfoDialog
     {
         id: _deleteDialog
@@ -165,6 +153,43 @@ Maui.PopupPage
 
     stack: [
 
+        ColumnLayout
+        {
+            Layout.fillWidth: true
+            spacing: Maui.Style.space.small
+
+            Maui.SectionHeader
+            {
+                readonly property var firstItemInfo: composerList.urls.length > 0
+                                                      ? FB.FM.getFileInfo(composerList.urls[0])
+                                                      : ({})
+                Layout.fillWidth: true
+                label1.text: firstItemInfo.label || i18nd("mauikitfilebrowsing", "Selected files")
+                label2.text: i18np("1 file", "%1 files", composerList.urls.length)
+            }
+
+            Maui.TextField
+            {
+                id: tagText
+                Layout.fillWidth: true
+                Layout.leftMargin: Maui.Style.space.small
+                Layout.rightMargin: Maui.Style.space.small
+                placeholderText: i18nd("mauikitfilebrowsing", "Filter or add a new tag")
+                icon.source: "tag"
+                onAccepted: control.commitPendingTags()
+                onTextChanged: _tagsModel.filter = text
+            }
+
+            FB.TagList
+            {
+                id: tagListComposer
+                Layout.fillWidth: true
+                visible: count > 0
+                onTagRemoved: (index) => list.remove(index)
+                placeholderText: i18nd("mauikitfilebrowsing", "No tags yet.")
+            }
+        },
+
         Maui.ListBrowser
         {
             id: _listView
@@ -178,37 +203,6 @@ Maui.PopupPage
             holder.visible: _listView.count === 0
             holder.title : i18nd("mauikitfilebrowsing", "No Tags!")
             holder.body: i18nd("mauikitfilebrowsing", "Create new tags to organize your files.")
-
-            header: Item
-            {
-                width: parent.width
-                height: 150
-
-                Pane
-                {
-                    id: _pane
-                    anchors.fill: parent
-                    anchors.bottomMargin: Maui.Style.space.medium
-
-                    background: Rectangle
-                    {
-                        color: Maui.Theme.alternateBackgroundColor
-                        radius: Maui.Style.radiusV
-                    }
-
-                   contentItem:  Maui.GridItemTemplate
-                    {
-                        readonly property string currentUrl : tagListComposer.list.urls.length > 0 ? tagListComposer.list.urls[0] : ""
-                        readonly property var itemInfo : currentUrl.length > 0 ? FB.FM.getFileInfo(currentUrl) : ({})
-
-                        iconSizeHint: Maui.Style.iconSizes.huge
-                        iconSource: itemInfo.icon || "tag"
-                        fillMode: Image.PreserveAspectCrop
-                        imageSource: control.thumbnailSource || itemInfo.thumbnail || ""
-                        text1: i18np("1 item", "%1 items", tagListComposer.list.urls.length)
-                    }
-                }
-            }
 
             model: Maui.BaseModel
             {
@@ -266,16 +260,6 @@ Maui.PopupPage
             }
         }
     ]
-
-    page.footer: FB.TagList
-    {
-        id: tagListComposer
-        width: parent ? parent.width : 0
-        visible: count > 0
-
-        onTagRemoved: (index) => list.remove(index)
-        placeholderText: i18nd("mauikitfilebrowsing", "No tags yet.")
-    }
 
     onClosed:
     {

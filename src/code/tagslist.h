@@ -128,8 +128,7 @@ public Q_SLOTS:
 
     /**
      * @brief Updates the tags associated to the current file URLs.
-     * If there is a single target URL, its tags are replaced by the provided list.
-     * If there are multiple target URLs, the provided tags are associated to each URL without removing existing ones.
+     * The tags associated to each target URL are replaced by the provided list.
      * @param tags tags to be updated
      */
     void updateToUrls(const QStringList &tags);
