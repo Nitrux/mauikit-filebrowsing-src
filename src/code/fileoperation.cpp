@@ -3,6 +3,11 @@
 #include <QDir>
 #include <QRegularExpression>
 
+#if defined(Q_OS_UNIX)
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 #ifdef KIO_AVAILABLE
 #include <KIO/CopyJob>
 #include <KIO/DeleteJob>
@@ -47,6 +52,35 @@ QString sourceNameForUrls(const QList<QUrl> &urls)
 }
 
 #ifdef KIO_AVAILABLE
+bool openLocalFileWithoutFollowingSymlink(QFile &file, const QString &path, QIODevice::OpenMode mode, bool createNew)
+{
+#if defined(Q_OS_UNIX) && defined(O_NOFOLLOW)
+    int flags = (mode & QIODevice::WriteOnly) ? O_RDWR : O_RDONLY;
+    flags |= O_NOFOLLOW;
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+    if (createNew)
+        flags |= O_CREAT | O_EXCL;
+
+    const QByteArray encodedPath = QFile::encodeName(path);
+    const int descriptor = ::open(encodedPath.constData(), flags, 0600);
+    if (descriptor < 0)
+        return false;
+
+    if (!file.open(descriptor, mode, QFileDevice::AutoCloseHandle))
+    {
+        ::close(descriptor);
+        return false;
+    }
+
+    return true;
+#else
+    file.setFileName(path);
+    return file.open(mode);
+#endif
+}
+
 bool hasLocalPartialCopy(const QUrl &source, const QUrl &destination)
 {
     if (!source.isLocalFile() || !destination.isLocalFile())
@@ -586,7 +620,7 @@ bool FileOperation::prepareLocalCopySource(Operation *operation)
     operation->localSource.close();
     operation->localDestination.close();
     operation->localSource.setFileName(sourceInfo.filePath());
-    if (!operation->localSource.open(QIODevice::ReadOnly))
+    if (!openLocalFileWithoutFollowingSymlink(operation->localSource, sourceInfo.filePath(), QIODevice::ReadOnly, false))
         return false;
 
     operation->localDestinationPath = destinationPath;
@@ -597,7 +631,7 @@ bool FileOperation::prepareLocalCopySource(Operation *operation)
     if (!temporaryExists)
         destinationMode |= QIODevice::Truncate;
 
-    if (!operation->localDestination.open(destinationMode))
+    if (!openLocalFileWithoutFollowingSymlink(operation->localDestination, temporaryPath, destinationMode, !temporaryExists))
     {
         operation->localSource.close();
         return false;
