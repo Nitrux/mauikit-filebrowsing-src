@@ -592,11 +592,15 @@ public Q_SLOTS:
      */
     const QUrl previousPath();
 
+    Q_INVOKABLE void navigateBack();
+
     /**
      * @brief The immediate posterior path location that was navigated
      * @return the path URL location
      */
     const QUrl posteriorPath();
+
+    Q_INVOKABLE void navigateForward();
 
     /**
      * @brief Given a file-name-query, check if it exists in the current location
@@ -627,6 +631,11 @@ Q_SIGNALS:
      * @param message the warning message text
      */
     void warning(QString message);
+
+    /**
+     * @brief Emitted when a remote server rejects the supplied credentials.
+     */
+    void authenticationError();
 
     /**
      * @brief Emitted while the file listing is still in progress.

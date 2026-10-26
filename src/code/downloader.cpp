@@ -160,7 +160,6 @@ void FMH::Downloader::onReadyRead()
         
         default: 
         {
-            qDebug() << reply->errorString();
             Q_EMIT this->warning(reply->errorString());
         }
     }

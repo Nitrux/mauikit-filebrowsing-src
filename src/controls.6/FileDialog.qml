@@ -225,7 +225,6 @@ Maui.PopupPage
             Maui.Controls.status: Maui.Controls.Positive
             onTriggered:
             {
-                console.log("CURRENT PATHb", _browser.currentPath+"/"+textField.text)
                 if(control.mode === FileDialog.Modes.Save && textField.text.length === 0)
                     return
 

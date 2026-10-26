@@ -330,7 +330,6 @@ Maui.Page
         Action
         {
             icon.name: "love"
-            onTriggered: console.log(_selectionBar.getSelectedUrisString())
         }
 
         Action
@@ -555,6 +554,9 @@ Maui.Page
         FB.FileListingDialog
         {
             id: _removeDialog
+
+            Behavior on width { enabled: false }
+            Behavior on height { enabled: false }
 
             title: i18nd("mauikitfilebrowsing", "Delete")
             showList: urls.length > 1
@@ -838,7 +840,6 @@ Maui.Page
             // Shortcut for pasting an item
             if((event.key == Qt.Key_V) && (event.modifiers & Qt.ControlModifier))
             {
-                console.log("trying to do paste with keyboard shorcut")
                 control.paste()
                 event.accepted = true
             }
@@ -983,7 +984,6 @@ Maui.Page
             onTriggered:
             {
                 const urls = _dropMenu.urls.split(",")
-                console.log("COPY THESE URLS,", urls, _dropMenu.urls)
                 control.currentFMList.copyInto(urls)
             }
         }
@@ -1173,7 +1173,6 @@ Maui.Page
      **/
     function paste()
     {
-        console.log("FILEBROWSER.PASTE", control.currentPath, control.currentFMList, control.readOnly)
 
         if (control.readOnly || !control.currentFMList || !control.currentFMList.clipboardHasContent)
             return
@@ -1320,7 +1319,7 @@ Maui.Page
      **/
     function goBack()
     {
-        openFolder(control.currentFMList.previousPath(), -1)
+        control.currentFMList.navigateBack()
     }
 
     /**
@@ -1328,7 +1327,7 @@ Maui.Page
      **/
     function goForward()
     {
-        openFolder(control.currentFMList.posteriorPath(), 1)
+        control.currentFMList.navigateForward()
     }
 
     /**

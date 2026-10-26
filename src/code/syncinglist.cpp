@@ -13,7 +13,6 @@ void SyncingList::setList()
     emit this->preListChanged();
 
     this->list = this->fm->getCloudAccounts();
-    qDebug() << "SYNCIGN LIST" << list;
 
     emit this->postListChanged();
 }

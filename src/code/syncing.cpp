@@ -83,7 +83,6 @@ QUrl Syncing::getCacheFile(const QUrl &path)
     const auto directory = QStringLiteral("");
     const auto file = directory + path.toString().replace(QStringLiteral("remote.php/webdav/"), QStringLiteral(""));
 
-    qDebug() << "resolving file" << file;
 
     if (FMH::fileExists(QUrl(file)))
         return QUrl(file);
@@ -96,13 +95,10 @@ void Syncing::download(const QUrl &path)
     QString url = QString(path.toString()).replace(QStringLiteral("remote.php/webdav/"), QStringLiteral(""));
 
     WebDAVReply *reply = this->client->downloadFrom(url);
-    qDebug() << "CURRENT CREDENTIALS" << this->host << this->user;
     connect(reply, &WebDAVReply::downloadResponse, this, [=](QNetworkReply *reply)
     {
         if (!reply->error())
         {
-            qDebug() << "\nDownload Success"
-                     << "\nURL  :" << reply->url() << "\nSize :" << reply->size();
             auto file = reply->readAll();
             const auto directory = FMStatic::CloudCachePath + QStringLiteral("opendesktop/") + this->user;
 
@@ -113,7 +109,6 @@ void Syncing::download(const QUrl &path)
 
             this->saveTo(file, QUrl(directory + url));
         } else {
-            qDebug() << "ERROR(DOWNLOAD)" << reply->error() << reply->url() << url;
             Q_EMIT this->error(reply->errorString());
         }
     });
@@ -121,14 +116,10 @@ void Syncing::download(const QUrl &path)
     connect(reply, &WebDAVReply::downloadProgressResponse, this, [=](qint64 bytesReceived, qint64 bytesTotal) {
         int percent = ((float)bytesReceived / bytesTotal) * 100;
 
-        qDebug() << "\nReceived : " << bytesReceived << "\nTotal    : " << bytesTotal << "\nPercent  : " << percent;
 
         Q_EMIT this->progress(percent);
     });
 
-    connect(reply, &WebDAVReply::error, this, [=](QNetworkReply::NetworkError err) {
-        qDebug() << "ERROR" << err;
-    });
 }
 
 void Syncing::upload(const QUrl &path, const QUrl &filePath)
@@ -136,19 +127,15 @@ void Syncing::upload(const QUrl &path, const QUrl &filePath)
     if (!FMH::fileExists(filePath))
         return;
 
-    qDebug() << "Copy to cloud. File exists" << path << filePath;
 
     this->mFile.setFileName(filePath.toString());
 
     if (this->mFile.open(QIODevice::ReadOnly)) {
-        qDebug() << "Copy to cloud. File could be opened";
 
         WebDAVReply *reply = this->client->uploadTo(path.toString(), QFileInfo(filePath.toString()).fileName(), &this->mFile);
 
         connect(reply, &WebDAVReply::uploadFinished, this, [=](QNetworkReply *reply) {
             if (!reply->error()) {
-                qDebug() << "\nUpload Success"
-                         << "\nURL  :" << reply->url() << "\nSize :" << reply->size();
 
                 auto cachePath = this->saveToCache(filePath.toString(), path);
 
@@ -157,18 +144,15 @@ void Syncing::upload(const QUrl &path, const QUrl &filePath)
 
                 Q_EMIT this->uploadReady(item, this->currentPath);
             } else {
-                qDebug() << "ERROR(UPLOAD)" << reply->error();
                 Q_EMIT this->error(reply->errorString());
             }
 
             if (!this->uploadQueue.isEmpty()) {
-                qDebug() << "UPLOAD QUEUE" << this->uploadQueue;
                 this->upload(path, QUrl(this->uploadQueue.takeLast()));
             }
         });
 
         connect(reply, &WebDAVReply::error, this, [=](QNetworkReply::NetworkError err) {
-            qDebug() << "ERROR" << err;
             this->emitError(err);
         });
     }
@@ -180,8 +164,6 @@ void Syncing::createDir(const QUrl &path, const QString &name)
 
     connect(reply, &WebDAVReply::createDirFinished, this, [=](QNetworkReply *reply) {
         if (!reply->error()) {
-            qDebug() << "\nDir Created"
-                     << "\nURL  :" << reply->url();
             FMH::MODEL dir = {{FMH::MODEL_KEY::LABEL, name},
                               {FMH::MODEL_KEY::DATE, QDateTime::currentDateTime().toString(Qt::TextDate)},
                               {FMH::MODEL_KEY::MIME, QStringLiteral("inode/directory")},
@@ -189,13 +171,11 @@ void Syncing::createDir(const QUrl &path, const QString &name)
                               {FMH::MODEL_KEY::PATH, this->currentPath.toString() + QStringLiteral("/") + name + QStringLiteral("/")}};
             Q_EMIT this->dirCreated(dir, this->currentPath);
         } else {
-            qDebug() << "ERROR(CREATE DIR)" << reply->error();
             Q_EMIT this->error(reply->errorString());
         }
     });
 
     connect(reply, &WebDAVReply::error, this, [=](QNetworkReply::NetworkError err) {
-        qDebug() << "ERROR" << err;
         this->emitError(err);
     });
 }
@@ -306,13 +286,11 @@ void Syncing::saveTo(const QByteArray &array, const QUrl &path)
         uint cut = path.toString().length() - path.toString().lastIndexOf(QStringLiteral("/")) - 1;
         auto newPath = path.toString().right(cut);
         dir.mkdir(path.toString().replace(newPath, QStringLiteral("")));
-        qDebug() << newPath << cut;
 
     } else
         file.remove();
 
     if (!file.open(QIODevice::WriteOnly)) {
-        qDebug() << "ERROR(SAVE)" << file.errorString() << path;
         return;
     }
     file.write(array);
@@ -352,7 +330,6 @@ void Syncing::resolveFile(const FMH::MODEL &item, const Syncing::SIGNAL_TYPE &si
         const auto dateCacheFile = QDateTime::fromString(cacheFile[FMH::MODEL_KEY::DATE], Qt::TextDate);
         const auto dateCloudFile = QDateTime::fromString(QString(item[FMH::MODEL_KEY::MODIFIED]).replace(QStringLiteral("GMT"), QStringLiteral("")).simplified(), QStringLiteral("ddd, dd MMM yyyy hh:mm:ss"));
 
-        qDebug() << "FILE EXISTS ON CACHE" << dateCacheFile << dateCloudFile << QString(item[FMH::MODEL_KEY::MODIFIED]).replace(QStringLiteral("GMT"), QStringLiteral("")).simplified() << file;
 
         if (dateCloudFile > dateCacheFile)
             this->download(QUrl(url));

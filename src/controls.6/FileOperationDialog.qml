@@ -23,6 +23,7 @@ Maui.PopupPage
     property int dialogSizeThreshold: 1024 * 1024
     property int dialogOpenDelay: Maui.Style.units.longDuration * 2
     property string lastSummaryText: ""
+    property bool replaceConflicts: false
 
     Component.onCompleted: synchronizeOperationModels()
 
@@ -140,10 +141,10 @@ Maui.PopupPage
 
         if (conflictDialog.visible && conflictDialog.operationId !== conflict.id)
             return
-
         conflictDialog.operationId = conflict.id
         conflictDialog.conflictDestination = conflict.conflictDestination
         conflictDialog.conflictKind = conflict.operation === "rename" ? "move" : conflict.kind
+        conflictDialog.canRename = conflict.kind === "copy" && conflict.itemCount === 1
         if (!control.visible)
             control.open()
         if (!conflictDialog.visible)
@@ -709,23 +710,15 @@ Maui.PopupPage
         property int operationId: -1
         property string conflictDestination: ""
         property string conflictKind: ""
-
-        title: i18nd("mauikitfilebrowsing", "Replace")
-        message: conflictKind === "move"
-                ? i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.\n\nReplace it with the file you’re moving?", control.conflictItemName(conflictDestination))
-                : i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.\n\nReplace it with the file you’re copying?", control.conflictItemName(conflictDestination))
+        property bool canRename: false
+        title: i18nd("mauikitfilebrowsing", "File already exists")
+        message: i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.", control.conflictItemName(conflictDestination))
         template.iconSource: "dialog-warning"
-        standardButtons: Dialog.Cancel | Dialog.Ok
+        standardButtons: Dialog.NoButton
 
         onOpened:
         {
-            const replaceButton = standardButton(Dialog.Ok)
-            if (replaceButton)
-                replaceButton.text = i18nd("mauikitfilebrowsing", "Replace")
-
-            const cancelButton = standardButton(Dialog.Cancel)
-            if (cancelButton)
-                cancelButton.text = i18nd("mauikitfilebrowsing", "Cancel")
+            conflictActionButton.forceActiveFocus()
         }
 
         onAccepted:
@@ -740,6 +733,69 @@ Maui.PopupPage
             const id = operationId
             close()
             FB.FileOperation.resolveConflict(id, false)
+        }
+
+        RowLayout
+        {
+            Layout.fillWidth: true
+            Layout.topMargin: Maui.Style.space.medium
+            spacing: Maui.Style.space.small
+
+            Button
+            {
+                id: conflictActionButton
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0
+                focus: true
+                text: replaceConflicts || !conflictDialog.canRename ? i18nd("mauikitfilebrowsing", "Replace") : i18nd("mauikitfilebrowsing", "Rename")
+                Maui.Controls.status: replaceConflicts || !conflictDialog.canRename ? Maui.Controls.Negative : Maui.Controls.Positive
+                highlighted: hovered || activeFocus
+                onClicked:
+                {
+                    const id = conflictDialog.operationId
+                    if (replaceConflicts || !conflictDialog.canRename)
+                    {
+                        conflictDialog.accept()
+                        return
+                    }
+
+                    const name = control.conflictItemName(conflictDialog.conflictDestination)
+                    close()
+                    const dialog = renameConflictDialogComponent.createObject(control, {
+                        operationId: id,
+                        initialName: name
+                    })
+                    dialog.open()
+                }
+            }
+
+            Button
+            {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0
+                text: i18nd("mauikitfilebrowsing", "Cancel")
+                onClicked: conflictDialog.reject()
+            }
+        }
+    }
+
+    Component
+    {
+        id: renameConflictDialogComponent
+
+        Maui.InputDialog
+        {
+            property int operationId: -1
+            property string initialName: ""
+
+            title: i18nd("mauikitfilebrowsing", "Rename")
+            message: i18nd("mauikitfilebrowsing", "Enter a new name for the copied file.")
+            template.iconSource: "edit-rename"
+            textEntry.text: initialName
+
+            onOpened: {}
+            onFinished: { FB.FileOperation.renameConflict(operationId, text) }
+            onRejected: { conflictDialog.open() }
         }
     }
 

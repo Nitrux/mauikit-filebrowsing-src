@@ -124,7 +124,6 @@ FMH::MODEL_LIST FMStatic::search(const QString &query, const QUrl &path, const b
     } else
         qWarning() << "Search path does not exists" << path;
 
-    qDebug() << content;
     return content;
 }
 
@@ -236,7 +235,6 @@ static bool copyRecursively(QString sourceFolder, QString destFolder)
 
 bool FMStatic::copy(const QList<QUrl> &urls, const QUrl &destinationDir)
 {
-    qDebug() << "FMStatic::copy requested" << "urls" << urls << "destination" << destinationDir;
 #ifdef KIO_AVAILABLE
     return FileOperation::startCopy(urls, destinationDir);
 #else
@@ -298,7 +296,6 @@ bool FMStatic::cut(const QList<QUrl> &urls, const QUrl &where)
 
 bool FMStatic::cut(const QList<QUrl> &urls, const QUrl &where, const QString &name)
 {
-    qDebug() << "FMStatic::cut requested" << "urls" << urls << "destination" << where << "name" << name;
 #ifdef KIO_AVAILABLE
     QUrl _where = where;
     if (!name.isEmpty())
@@ -343,15 +340,11 @@ bool FMStatic::removeFiles(const QList<QUrl> &urls)
 #ifdef KIO_AVAILABLE
     return FileOperation::startDelete(urls);
 #else
-    qDebug() << "ASKED GTO DELETE FILES" << urls;
     for (const auto &url : std::as_const(urls)) {
-        qDebug() << "@ Want to remove files << " << url.toLocalFile();
 
         if (isDir(url)) {
-            qDebug() << "Want to remove dir << " << url.toLocalFile();
             FMStatic::removeDir(url);
         } else {
-            qDebug() << "Want to remove files << " << url.toLocalFile();
             QFile::remove(url.toLocalFile());
         }
     }
@@ -384,7 +377,6 @@ bool FMStatic::removeDir(const QUrl &path)
 {
     bool result = true;
     QDir dir(path.toLocalFile());
-    qDebug() << "TRYING TO REMOVE DIR" << path << path.toLocalFile();
     if (dir.exists())
     {
         for (const QFileInfo &info : dir.entryInfoList(QDir::NoDotAndDotDot | QDir::System | QDir::Hidden | QDir::AllDirs | QDir::Files, QDir::DirsFirst))
@@ -448,7 +440,6 @@ bool FMStatic::createFile(const QUrl &path, const QString &name)
 bool FMStatic::createSymlink(const QUrl &path, const QUrl &where)
 {
 #ifdef KIO_AVAILABLE
-    qDebug() << "trying to create symlink" << path << where;
     const auto job = KIO::link({path}, where);
     disableKioUi(job);
     job->start();
@@ -573,7 +564,7 @@ const QString FMStatic::getMime(const QUrl &path)
 static const QUrl thumbnailUrl(const QUrl &url, const QString &mimetype)
 {
 #ifdef KIO_AVAILABLE
-    if (FMStatic::checkFileType(FMStatic::FILTER_TYPE::FONT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::TEXT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::AUDIO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::DOCUMENT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::VIDEO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::IMAGE, mimetype) || url.toString().endsWith(QStringLiteral(".appimage"), Qt::CaseInsensitive)) {
+    if (FMStatic::checkFileType(FMStatic::FILTER_TYPE::FONT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::TEXT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::AUDIO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::DOCUMENT, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::VIDEO, mimetype) || FMStatic::checkFileType(FMStatic::FILTER_TYPE::IMAGE, mimetype)) {
         return QUrl(QStringLiteral("image://thumbnailer/") + url.toString());
     }
 #endif
@@ -588,7 +579,7 @@ static const QUrl thumbnailUrl(const QUrl &url, const QString &mimetype)
 #ifdef KIO_AVAILABLE
 const FMH::MODEL FMStatic::getFileInfo(const KFileItem &kfile)
 {
-    const auto itemUrl = kfile.url().scheme() == QStringLiteral("trash") ? kfile.url() : kfile.mostLocalUrl();
+    const auto itemUrl = kfile.url();
 
     return FMH::MODEL {
         {FMH::MODEL_KEY::LABEL, kfile.name()},

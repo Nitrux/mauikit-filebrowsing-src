@@ -37,9 +37,40 @@
 #include <KIO/CopyJob>
 #include <KIO/Job>
 #include <KIO/DeleteJob>
+#include <KIO/ListJob>
 #include <KIO/MkdirJob>
 #include <KIO/SimpleJob>
 #include <QIcon>
+
+namespace
+{
+class NoAuthPromptDirLister : public KCoreDirLister
+{
+public:
+    explicit NoAuthPromptDirLister(QObject *parent = nullptr)
+        : KCoreDirLister(parent)
+    {}
+
+protected:
+    void jobStarted(KIO::ListJob *job) override
+    {
+        KCoreDirLister::jobStarted(job);
+        if (job)
+        {
+            job->addMetaData(QStringLiteral("no-auth-prompt"), QStringLiteral("true"));
+        }
+    }
+};
+
+bool isAuthenticationError(const int error)
+{
+    return error == KIO::ERR_CANNOT_AUTHENTICATE
+           || error == KIO::ERR_CANNOT_LOGIN
+           || error == KIO::ERR_NEED_PASSWD
+           || error == KIO::ERR_USER_CANCELED;
+}
+}
+
 #else
 
 #include "fileloader.h"
@@ -91,7 +122,6 @@ void QDirLister::reviewChanges()
     auto checkLoader = new FMH::FileLoader;
     checkLoader->informer = &FMStatic::getFileInfoModel;
 
-    qDebug() << "Doign the check" << m_checking;
 
     FMH::MODEL_LIST removedItems;
     const auto mlist = this->m_list; // use a copy to not affect the list indexes on the iterations
@@ -169,7 +199,6 @@ bool QDirLister::openUrl(const QUrl &url)
     //    if(this->m_url == url)
     //        return false;
 
-    qDebug() << "open URL" << url;
     this->m_url = url;
     this->m_list.clear();
     this->m_watcher->removePaths(QStringList() << this->m_watcher->directories() << this->m_watcher->files());
@@ -217,7 +246,7 @@ FM::FM(QObject *parent)
     , sync(new Syncing(this))
 #endif
 #ifdef KIO_AVAILABLE
-    , dirLister(new KCoreDirLister(this))
+    , dirLister(new NoAuthPromptDirLister(this))
 #else
     , dirLister(new QDirLister(this))
 #endif
@@ -229,11 +258,21 @@ FM::FM(QObject *parent)
     this->dirLister->setAutoUpdate(true);
     this->dirLister->setAutoErrorHandlingEnabled(false);
     connect(dirLister, &KCoreDirLister::jobError, this, [this](KIO::Job *job) {
-        if (job)
-            Q_EMIT this->warningMessage(job->errorString());
+        if (!job)
+            return;
+
+        const bool authenticationError = isAuthenticationError(job->error());
+
+        if (authenticationError)
+            Q_EMIT this->authenticationError();
+
+        Q_EMIT this->warningMessage(job->errorString());
     });
 
-    const static auto packItems = [](const KFileItemList &items) -> FMH::MODEL_LIST {
+    const static auto packItems = [](const QUrl &directoryUrl, const KFileItemList &items) -> FMH::MODEL_LIST {
+        if (directoryUrl.scheme() == QStringLiteral("remote"))
+            return {};
+
         return std::accumulate(items.constBegin(), items.constEnd(), FMH::MODEL_LIST(), [](FMH::MODEL_LIST &res, const KFileItem &item) -> FMH::MODEL_LIST {
             res << FMStatic::getFileInfo(item);
             return res;
@@ -249,11 +288,10 @@ FM::FM(QObject *parent)
     });
 
     connect(dirLister, static_cast<void (KCoreDirLister::*)(const QUrl &, const KFileItemList &items)>(&KCoreDirLister::itemsAdded), this, [&](QUrl dirUrl, KFileItemList items) {
-        Q_EMIT this->pathContentItemsReady({dirUrl, packItems(items)});
+        Q_EMIT this->pathContentItemsReady({dirUrl, packItems(dirUrl, items)});
     });
 
     connect(dirLister, &KCoreDirLister::redirection, this, [&](const QUrl &from, const QUrl &to) {
-        qDebug() << "PATH REDIRECTED" << from << to;
         Q_EMIT this->pathRedirected(from, to);
     });
 
@@ -267,8 +305,7 @@ FM::FM(QObject *parent)
     //        });
 
     connect(dirLister, static_cast<void (KCoreDirLister::*)(const KFileItemList &items)>(&KCoreDirLister::itemsDeleted), this, [&](KFileItemList items) {
-        qDebug() << "ITEMS WERE DELETED";
-        Q_EMIT this->pathContentItemsRemoved({dirLister->url(), packItems(items)});
+        Q_EMIT this->pathContentItemsRemoved({dirLister->url(), packItems(dirLister->url(), items)});
     });
 
     connect(dirLister, static_cast<void (KCoreDirLister::*)(const QList<QPair<KFileItem, KFileItem>> &items)>(&KCoreDirLister::refreshItems), this, [&](QList<QPair<KFileItem, KFileItem>> items) {
@@ -295,13 +332,11 @@ FM::FM(QObject *parent)
     });
 
     connect(dirLister, &QDirLister::itemsAdded, this, [&](FMH::MODEL_LIST items, QUrl url) {
-        qDebug() << "MORE ITEMS WERE ADDED";
         Q_EMIT this->pathContentItemsReady({url, items});
         Q_EMIT this->pathContentReady(url); //Q_EMIT this to force to sort on fmlist
     });
 
     connect(dirLister, &QDirLister::itemsDeleted, this, [&](FMH::MODEL_LIST items, QUrl url) {
-        qDebug() << "ITEMS WERE DELETED";
         Q_EMIT this->pathContentItemsRemoved({url, items});
     });
 

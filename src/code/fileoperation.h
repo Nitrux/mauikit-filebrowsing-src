@@ -80,6 +80,7 @@ public:
     Q_INVOKABLE bool resumeOperation(int id);
     Q_INVOKABLE bool moveOperationTo(int id, int targetId);
     Q_INVOKABLE void resolveConflict(int id, bool replace);
+    Q_INVOKABLE void renameConflict(int id, const QString &name);
 
 #ifdef KIO_AVAILABLE
 private Q_SLOTS:

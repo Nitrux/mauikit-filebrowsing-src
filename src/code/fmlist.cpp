@@ -24,6 +24,7 @@
 #include "syncing.h"
 #endif
 
+#include <QDebug>
 #include <QFuture>
 #include <QThread>
 #include <QtConcurrent/QtConcurrentRun>
@@ -112,8 +113,14 @@ bool clipboardCutOperation(const QMimeData *mimeData)
     return false;
 }
 
-QUrl normalizedPath(const QUrl &path)
+QUrl normalizedPath(QUrl path)
 {
+    if (!path.isLocalFile())
+    {
+        path.setUserName(QString());
+        path.setPassword(QString());
+    }
+
     return path.adjusted(QUrl::NormalizePathSegments | QUrl::StripTrailingSlash);
 }
 
@@ -162,7 +169,8 @@ FMList::FMList(QObject *parent)
 
         Q_EMIT this->preListChanged();
         this->sortList();
-        this->setStatus(this->emptyStateStatus());
+        const auto status = this->emptyStateStatus();
+        this->setStatus(status);
         Q_EMIT this->postListChanged();
         Q_EMIT this->countChanged();
     });
@@ -224,6 +232,10 @@ FMList::FMList(QObject *parent)
 
     connect(this->fm, &FM::warningMessage, [this](const QString &message) {
         Q_EMIT this->warning(message);
+    });
+
+    connect(this->fm, &FM::authenticationError, [this]() {
+        Q_EMIT this->authenticationError();
     });
 
     connect(this->fm, &FM::loadProgress, [this](const int &percent) {
@@ -583,6 +595,7 @@ void FMList::redirectPath(const QUrl &from, const QUrl &to)
     m_navHistory.replaceLastPath(from, to);
     this->applyPath(to, false, true);
     m_suppressReload = false;
+    QMetaObject::invokeMethod(this, [this]() { this->setList(); }, Qt::QueuedConnection);
 }
 
 FMList::PATHTYPE FMList::getPathType() const
@@ -883,6 +896,20 @@ const QUrl FMList::getParentPath()
     case FMList::PATHTYPE::PLACES_PATH:
         return FMStatic::parentDir(this->path);
     default:
+        if (this->pathType == FMList::PATHTYPE::REMOTE_PATH) {
+            QUrl parent = this->path;
+            QString parentPath = parent.path();
+            while (parentPath.length() > 1 && parentPath.endsWith(QLatin1Char('/')))
+                parentPath.chop(1);
+
+            if (parentPath.isEmpty() || parentPath == QStringLiteral("/"))
+                return parent;
+
+            const auto separator = parentPath.lastIndexOf(QLatin1Char('/'));
+            parent.setPath(separator <= 0 ? QStringLiteral("/") : parentPath.left(separator));
+            return parent;
+        }
+
         return this->previousPath();
     }
 }
@@ -905,6 +932,20 @@ const QUrl FMList::previousPath()
         return this->path;
 
     return url;
+}
+
+void FMList::navigateBack()
+{
+    const auto url = this->previousPath();
+    if (!url.isEmpty() && url != this->path)
+        this->applyPath(url, false, true);
+}
+
+void FMList::navigateForward()
+{
+    const auto url = this->posteriorPath();
+    if (!url.isEmpty() && url != this->path)
+        this->applyPath(url, false, true);
 }
 
 bool FMList::getFoldersFirst() const

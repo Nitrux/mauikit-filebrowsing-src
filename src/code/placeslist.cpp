@@ -28,6 +28,7 @@
 
 #ifdef KIO_AVAILABLE
 #include <KFilePlacesModel>
+#include <KProtocolInfo>
 #include <Solid/Device>
 #include <Solid/SolidNamespace>
 #else
@@ -152,6 +153,9 @@ FMH::MODEL_LIST PlacesList::getGroup(const KFilePlacesModel &model, const FMStat
     res << std::accumulate(group.constBegin(), group.constEnd(), FMH::MODEL_LIST(), [&model, &type, this](FMH::MODEL_LIST &list, const QModelIndex &index) -> FMH::MODEL_LIST 
                            {
                                const QUrl url = model.url(index);
+                               if (type == FMStatic::PATHTYPE_KEY::REMOTE_PATH && !KProtocolInfo::isKnownProtocol(url))
+                                   return list;
+
                                if (type == FMStatic::PATHTYPE_KEY::BOOKMARKS_PATH && FMStatic::defaultPaths.contains(url.toString()))
                                    return list;
 
@@ -165,7 +169,6 @@ FMH::MODEL_LIST PlacesList::getGroup(const KFilePlacesModel &model, const FMStat
                                if(model.isDevice(index))
                                {
                                    const auto udi =  model.deviceForIndex(index).udi();
-                                   qDebug() << "DEVICE" << udi;
 
                                    data.insert(FMH::MODEL_KEY::UDI, udi);
                                    m_devices.insert(udi, index);

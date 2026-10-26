@@ -225,6 +225,11 @@ Q_SIGNALS:
      * @param message the error message
      */
     void warningMessage(QString message);
+
+    /**
+     * @brief Emitted when a remote server rejects the supplied credentials.
+     */
+    void authenticationError();
     
     /**
      * @brief Emitted with the progress of the listing.
