@@ -690,46 +690,202 @@ Maui.Page
     {
         id: renameDialogComponent
 
-        Maui.InputDialog
+        Maui.PopupPage
         {
-            id: _renameDialog
+                id: batchRenameDialog
 
-            property var item : ({})
-            onClosed:
-            {
-                control.restoreBrowserFocus()
-                destroy()
-            }
-            title: i18nd("mauikitfilebrowsing", "Rename")
-            message: i18nd("mauikitfilebrowsing", "Enter the new name for the file.")
+                property var files: []
+                property bool namesValid: false
 
-            template.iconSource: item.icon
-            template.imageSource: item.thumbnail
+                widthHint: 0.9
+                maxWidth: Maui.Style.units.gridUnit * 30
+                maxHeight: Maui.Style.units.gridUnit * 32
+                height: Math.min(implicitHeight, maxHeight)
+                title: i18np("Rename 1 file", "Rename %1 files", files.length)
+                persistent: false
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-            textEntry.text: item.label
-            textEntry.placeholderText: i18nd("mauikitfilebrowsing", "New name")
-
-            onFinished: control.currentFMList.renameFile(item.path, textEntry.text)
-            onRejected: close()
-
-            //            acceptButton.text: i18nd("mauikitfilebrowsing", "Rename")
-            //            rejectButton.text: i18nd("mauikitfilebrowsing", "Cancel")
-
-            onOpened:
-            {
-                if (!item.path)
-                    item = control.currentFMModel.get(control.currentIndex)
-
-                if(_renameDialog.textEntry.text.lastIndexOf(".") >= 0)
+                header: Maui.DialogHeader
                 {
-                    _renameDialog.textEntry.select(0, _renameDialog.textEntry.text.lastIndexOf("."))
-                }else
+                    width: parent ? parent.width : implicitWidth
+                    title: batchRenameDialog.title
+                    onCloseRequested: batchRenameDialog.close()
+                }
+
+                actions: [
+                    Action
+                    {
+                        text: i18nd("mauikitfilebrowsing", "Cancel")
+                        onTriggered: batchRenameDialog.close()
+                    },
+                    Action
+                    {
+                        Maui.Controls.status: Maui.Controls.Positive
+                        text: i18nd("mauikitfilebrowsing", "Rename")
+                        enabled: batchRenameDialog.namesValid
+                        onTriggered: batchRenameDialog.finishRename()
+                    }
+                ]
+
+                ListModel
                 {
-                    _renameDialog.textEntry.selectAll()
+                    id: renameModel
+                }
+
+                function validName(name)
+                {
+                    const value = String(name).trim()
+                    if (value.length === 0 || value === "." || value === ".."
+                            || value.indexOf("/") >= 0 || value.indexOf(String.fromCharCode(92)) >= 0)
+                        return false
+
+                    for (let i = 0; i < value.length; ++i)
+                    {
+                        const code = value.charCodeAt(i)
+                        if (code < 32 || code === 127)
+                            return false
+                    }
+
+                    return true
+                }
+
+                function updateValidity()
+                {
+                    const names = []
+                    for (let i = 0; i < renameModel.count; ++i)
+                    {
+                        const entry = renameModel.get(i)
+                        const name = String(entry.newName).trim()
+                        if (!validName(name))
+                        {
+                            namesValid = false
+                            return
+                        }
+
+                        const parent = String(FB.FM.parentDir(entry.path))
+                        const key = parent + "|" + name
+                        if (names.indexOf(key) >= 0)
+                        {
+                            namesValid = false
+                            return
+                        }
+
+                        if (name !== entry.originalName)
+                        {
+                            const separator = parent.endsWith("/") ? "" : "/"
+                            if (FB.FM.fileExists(parent + separator + name))
+                            {
+                                namesValid = false
+                                return
+                            }
+                        }
+
+                        names.push(key)
+                    }
+
+                    namesValid = renameModel.count > 0
+                }
+
+                function finishRename()
+                {
+                    if (!namesValid)
+                        return
+
+                    for (let i = 0; i < renameModel.count; ++i)
+                    {
+                        const entry = renameModel.get(i)
+                        const name = String(entry.newName).trim()
+                        if (name !== entry.originalName)
+                            control.currentFMList.renameFile(entry.path, name)
+                    }
+
+                    close()
+                }
+
+                Component.onCompleted:
+                {
+                    for (const file of files)
+                    {
+                        if (file && file.path)
+                        {
+                            renameModel.append({
+                                path: file.path,
+                                originalName: String(file.label || ""),
+                                newName: String(file.label || ""),
+                                icon: file.icon || "",
+                                thumbnail: file.thumbnail || ""
+                            })
+                        }
+                    }
+                    updateValidity()
+                }
+
+                onClosed:
+                {
+                    control.restoreBrowserFocus()
+                    destroy()
+                }
+
+                stack: Maui.ScrollColumn
+                {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 0
+                    padding: 0
+                    bottomPadding: Maui.Style.space.medium
+                    spacing: Maui.Style.space.small
+
+                    Maui.SectionHeader
+                    {
+                        Layout.fillWidth: true
+                        label1.text: i18nd("mauikitfilebrowsing", "Pending files")
+                        label2.text: i18np("1 file", "%1 files", renameModel.count)
+                    }
+
+                    Repeater
+                    {
+                        model: renameModel
+
+                        delegate: RowLayout
+                        {
+                            required property int index
+                            required property string path
+                            required property string originalName
+                            required property string newName
+                            required property string icon
+                            required property string thumbnail
+                            Layout.fillWidth: true
+                            spacing: Maui.Style.space.small
+
+                            Maui.ListItemTemplate
+                            {
+                                Layout.fillWidth: true
+                                text1: originalName
+                                text2: path
+                                iconSource: icon
+                                imageSource: thumbnail
+                                iconSizeHint: Maui.Style.iconSizes.medium
+                            }
+
+                            Maui.TextField
+                            {
+                                Layout.fillWidth: true
+                                text: newName
+                                placeholderText: i18nd("mauikitfilebrowsing", "New name")
+                                onTextChanged:
+                                {
+                                    if (renameModel.get(index).newName === text)
+                                        return
+
+                                    renameModel.setProperty(index, "newName", text)
+                                    batchRenameDialog.updateValidity()
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
 
     Component
     {
@@ -806,8 +962,7 @@ Maui.Page
             // Shortcuts for renaming
             if((event.key === Qt.Key_F2))
             {
-                var dialog = renameDialogComponent.createObject(control, ({'item': control.currentFMModel.get(index)}))
-                dialog.open()
+                control.renameItem()
                 event.accepted = true
             }
 
@@ -1522,7 +1677,21 @@ Maui.Page
         if(control.isSearchView)
             return;
 
-        var dialog = renameDialogComponent.createObject(control)
+        var items = []
+        if(control.selectionBar && control.selectionBar.count > 0)
+        {
+            for(var uri of control.selectionBar.uris)
+            {
+                const item = FB.FM.getFileInfo(uri)
+                if(item && item.path)
+                    items.push(item)
+            }
+        }
+
+        if(items.length === 0)
+            items.push(control.currentFMModel.get(control.currentIndex))
+
+        var dialog = renameDialogComponent.createObject(control, ({"files": items}))
         dialog.open()
         dialog.forceActiveFocus()
     }

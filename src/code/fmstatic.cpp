@@ -266,9 +266,17 @@ bool FMStatic::paste(const QList<QUrl> &urls, const QUrl &destinationDir, bool c
 {
 #ifdef KIO_AVAILABLE
     if (cut)
-        return FileOperation::startMove(urls, destinationDir, QStringLiteral("paste"));
+    {
+        bool started = false;
+        for (const QUrl &url : urls)
+            started = FileOperation::startMove({url}, destinationDir, QStringLiteral("paste")) || started;
+        return started;
+    }
 
-    return FileOperation::startCopy(urls, destinationDir, QStringLiteral("paste"));
+    bool started = false;
+    for (const QUrl &url : urls)
+        started = FileOperation::startCopy({url}, destinationDir, QStringLiteral("paste")) || started;
+    return started;
 #else
     if (cut)
         return FMStatic::cut(urls, destinationDir);

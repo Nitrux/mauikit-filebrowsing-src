@@ -305,6 +305,7 @@ void FileOperation::startPendingOperations()
 bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
 {
 #ifdef KIO_AVAILABLE
+
     if (operation->kind == QStringLiteral("copy"))
     {
         if (startLocalCopy(operation))
@@ -344,7 +345,19 @@ bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
     else if (operation->kind == QStringLiteral("trash"))
         job = KIO::trash(operation->urls, KIO::HideProgressInfo);
     else if (operation->kind == QStringLiteral("move"))
-        job = KIO::move(operation->urls, operation->destinationUrl, flags);
+    {
+        QUrl destination = operation->destinationUrl;
+        if (operation->operation != QStringLiteral("rename")
+                && !operation->targetName.isEmpty() && operation->urls.size() == 1)
+        {
+            QString path = destination.path();
+            if (!path.endsWith(QLatin1Char('/')))
+                path += QLatin1Char('/');
+            path += operation->targetName;
+            destination.setPath(path);
+        }
+        job = KIO::move(operation->urls, destination, flags);
+    }
     else
     {
         QUrl destination = operation->destinationUrl;
@@ -443,7 +456,9 @@ bool FileOperation::checkLocalMoveConflict(Operation *operation)
         if (!sourceInfo.exists())
             return false;
 
-        const QFileInfo destinationInfo(destinationDir.filePath(sourceInfo.fileName()));
+        const QFileInfo destinationInfo(destinationDir.filePath(operation->targetName.isEmpty()
+                                                                         ? sourceInfo.fileName()
+                                                                         : operation->targetName));
         if (destinationInfo.exists() && !operation->overwriteExisting)
         {
             operation->conflictPending = true;
@@ -495,8 +510,14 @@ bool FileOperation::startLocalCopy(Operation *operation)
         const QFileInfo destinationRootInfo(destinationRoot);
         const QString sourcePath = QDir::cleanPath(sourceInfo.absoluteFilePath());
         const QString destinationPath = QDir::cleanPath(destinationRootInfo.absoluteFilePath());
-        if (sourcePath == destinationPath
-                || (sourceInfo.isDir() && destinationPath.startsWith(sourcePath + QDir::separator())))
+        if (sourcePath == destinationPath)
+        {
+            if (!operation->overwriteExisting)
+                requestConflict(destinationRoot);
+            return false;
+        }
+
+        if (sourceInfo.isDir() && destinationPath.startsWith(sourcePath + QDir::separator()))
             return false;
 
         if (sourceInfo.isDir())
@@ -786,8 +807,8 @@ void FileOperation::finishKioOperation(Operation *operation, KJob *job)
         {
             QUrl destination = operation->destinationUrl;
             QString path = destination.path();
-            if (!path.endsWith(QLatin1Char(47)))
-                path += QLatin1Char(47);
+            if (!path.endsWith(QLatin1Char('/')))
+                path += QLatin1Char('/');
             path += operation->targetName.isEmpty() ? operation->urls.constFirst().fileName() : operation->targetName;
             destination.setPath(path);
             operation->conflictDestination = destination;
@@ -1296,6 +1317,7 @@ void FileOperation::resolveConflict(int id, bool replace)
     if (!operation || operation->active || !operation->conflictPending)
         return;
 
+
     if (!replace)
     {
         cancelOperation(id);
@@ -1309,11 +1331,50 @@ void FileOperation::resolveConflict(int id, bool replace)
     startPendingOperations();
 }
 
+QString FileOperation::conflictRenameSuggestion(int id) const
+{
+#ifdef KIO_AVAILABLE
+    const Operation *operation = findOperation(id);
+    if (!operation || !operation->conflictPending || operation->urls.size() != 1)
+        return {};
+
+    const QString originalName = operation->conflictDestination.fileName();
+    if (originalName.isEmpty())
+        return {};
+
+    const int dot = originalName.lastIndexOf(QLatin1Char('.'));
+    const bool hasExtension = dot > 0;
+    const QString baseName = hasExtension ? originalName.left(dot) : originalName;
+    const QString extension = hasExtension ? originalName.mid(dot) : QString();
+    auto makeCandidate = [&baseName, &extension](int index) {
+        const QString suffix = index == 1
+                ? QStringLiteral(" (copy)")
+                : QStringLiteral(" (copy %1)").arg(index);
+        return baseName + suffix + extension;
+    };
+
+    QString candidate = makeCandidate(1);
+    if (!operation->conflictDestination.isLocalFile())
+        return candidate;
+
+    const QDir directory(QFileInfo(operation->conflictDestination.toLocalFile()).absolutePath());
+    int index = 1;
+    while (QFileInfo::exists(directory.filePath(candidate)))
+        candidate = makeCandidate(++index);
+    return candidate;
+#else
+    Q_UNUSED(id)
+    return {};
+#endif
+}
+
 void FileOperation::renameConflict(int id, const QString &name)
 {
     Operation *operation = findOperation(id);
     if (!operation || operation->active || !operation->conflictPending
-            || operation->kind != QStringLiteral("copy") || operation->urls.size() != 1)
+            || (operation->kind != QStringLiteral("copy")
+                && operation->kind != QStringLiteral("move"))
+            || operation->urls.size() != 1)
         return;
 
     const QString trimmedName = name.trimmed();
@@ -1324,7 +1385,30 @@ void FileOperation::renameConflict(int id, const QString &name)
             || trimmedName.contains(QRegularExpression(QStringLiteral("[\\x00-\\x1F\\x7F]"))))
         return;
 
-    operation->targetName = trimmedName;
+    QString resolvedName = trimmedName;
+    if (resolvedName == operation->conflictDestination.fileName())
+    {
+        const QString suggestion = conflictRenameSuggestion(id);
+        if (!suggestion.isEmpty())
+        {
+            resolvedName = suggestion;
+        }
+    }
+
+    if (operation->operation == QStringLiteral("rename"))
+    {
+        QString path = operation->destinationUrl.path();
+        const int separator = path.lastIndexOf(QLatin1Char('/'));
+        if (separator >= 0)
+        {
+            path = path.left(separator + 1) + resolvedName;
+            operation->destinationUrl.setPath(path);
+        }
+    }
+    else
+    {
+        operation->targetName = resolvedName;
+    }
     operation->conflictPending = false;
     operation->conflictDestination.clear();
     notifyOperationsChanged();

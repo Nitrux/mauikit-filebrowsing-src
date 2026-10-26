@@ -135,16 +135,17 @@ Maui.PopupPage
         if (!conflict)
         {
             if (conflictDialog.visible)
+            {
                 conflictDialog.close()
+            }
             return
         }
 
-        if (conflictDialog.visible && conflictDialog.operationId !== conflict.id)
-            return
+        const canRename = (conflict.kind === "copy" || conflict.kind === "move") && conflict.itemCount === 1
         conflictDialog.operationId = conflict.id
         conflictDialog.conflictDestination = conflict.conflictDestination
         conflictDialog.conflictKind = conflict.operation === "rename" ? "move" : conflict.kind
-        conflictDialog.canRename = conflict.kind === "copy" && conflict.itemCount === 1
+        conflictDialog.canRename = canRename
         if (!control.visible)
             control.open()
         if (!conflictDialog.visible)
@@ -415,6 +416,7 @@ Maui.PopupPage
 
                         delegate: ColumnLayout
                         {
+                            required property int index
                             required property var operationData
                             Layout.fillWidth: true
                             Layout.topMargin: Maui.Style.space.small
@@ -542,152 +544,53 @@ Maui.PopupPage
             {
                 model: waitingModel
 
-                delegate: ColumnLayout
+                delegate: Item
                 {
+                    required property int index
                     required property var operationData
                     Layout.fillWidth: true
                     Layout.topMargin: Maui.Style.space.small
                     Layout.bottomMargin: Maui.Style.space.small
-                    spacing: Maui.Style.space.small
+                    implicitHeight: operationContent.implicitHeight
 
-                    DropArea
+                    ColumnLayout
                     {
-                        id: operationDropArea
-                        anchors.fill: parent
-                        z: -1
-                        enabled: operationData.canMove
-                        keys: ["file-operation"]
+                        id: operationContent
+                        width: parent.width
+                        spacing: Maui.Style.space.small
 
-                        onEntered: function(drag)
+                        Maui.ListItemTemplate
                         {
-                            const source = drag.source
-                            if (!source || source.operationId === operationData.id)
-                                return
-
-                            FB.FileOperation.moveOperationTo(source.operationId, operationData.id)
+                            Layout.fillWidth: true
+                            text1: control.operationTitle(operationData)
+                            text2: control.operationDestination(operationData)
+                            text3: control.operationStatus(operationData)
+                            iconVisible: false
+                            iconSizeHint: Maui.Style.iconSizes.small
+                            label3.font: Maui.Style.defaultFont
+                            label3.opacity: 1
                         }
-                    }
-
-                    Maui.ListItemTemplate
-                    {
-                        Layout.fillWidth: true
-                        text1: control.operationTitle(operationData)
-                        text2: control.operationDestination(operationData)
-                        text3: control.operationStatus(operationData)
-                        iconVisible: false
-                        iconSizeHint: Maui.Style.iconSizes.small
-                        label3.font: Maui.Style.defaultFont
-                        label3.opacity: 1
-                    }
-
-                    Label
-                    {
-                        visible: operationData.status === "failed"
-                        Layout.fillWidth: true
-                        text: control.operationDetails(operationData)
-                        color: Maui.Theme.negativeTextColor
-                        wrapMode: Text.WordWrap
-                    }
 
                     RowLayout
                     {
+                        visible: operationData.status === "failed"
                         Layout.fillWidth: true
 
-                        Item
+                        Label
                         {
-                            id: dragHandle
-                            property int operationId: operationData.id
-                            visible: operationData.canMove
-                            implicitWidth: Maui.Style.space.big
-                            implicitHeight: dragDots.implicitHeight
-                            Layout.alignment: Qt.AlignVCenter
-
-                            Row
-                            {
-                                id: dragDots
-                                anchors.centerIn: parent
-                                spacing: Maui.Style.units.smallSpacing
-
-                                Repeater
-                                {
-                                    model: 2
-
-                                    Column
-                                    {
-                                        spacing: Maui.Style.units.smallSpacing
-
-                                        Repeater
-                                        {
-                                            model: 4
-
-                                            Rectangle
-                                            {
-                                                width: Maui.Style.units.smallSpacing
-                                                height: width
-                                                radius: width / 2
-                                                color: Maui.Theme.textColor
-                                                opacity: dragHandler.active ? 0.9 : 0.55
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Item
-                            {
-                                id: dragProxy
-                                property int operationId: operationData.id
-                                x: 0
-                                y: 0
-                                width: dragHandle.width
-                                height: dragHandle.height
-                                visible: dragHandler.active
-
-                                Drag.active: dragHandler.active
-                                Drag.source: dragProxy
-                                Drag.keys: ["file-operation"]
-                                Drag.hotSpot.x: width / 2
-                                Drag.hotSpot.y: height / 2
-                            }
-
-                            DragHandler
-                            {
-                                id: dragHandler
-                                enabled: dragHandle.visible
-                                target: dragProxy
-                                xAxis.enabled: false
-                            }
-
-                            HoverHandler
-                            {
-                                id: dragHandleHoverHandler
-                                cursorShape: dragHandler.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-                            }
-
-                            ToolTip.visible: dragHandleHoverHandler.hovered
-                            ToolTip.text: i18nd("mauikitfilebrowsing", "Reorder operation")
+                            Layout.fillWidth: true
+                            text: control.operationDetails(operationData)
+                            color: Maui.Theme.negativeTextColor
+                            wrapMode: Text.WordWrap
                         }
 
                         ToolButton
                         {
-                            visible: operationData.status === "failed"
                             enabled: operationData.canClear
                             display: ToolButton.IconOnly
                             icon.name: "edit-clear"
                             text: i18nd("mauikitfilebrowsing", "Clear operation")
                             onClicked: FB.FileOperation.clearOperation(operationData.id)
-                            ToolTip.visible: hovered
-                            ToolTip.text: text
-                        }
-
-                        ToolButton
-                        {
-                            visible: operationData.status === "queued"
-                            enabled: operationData.canCancel
-                            display: ToolButton.IconOnly
-                            icon.name: "edit-clear"
-                            text: i18nd("mauikitfilebrowsing", "Cancel queued transfer")
-                            onClicked: FB.FileOperation.cancelOperation(operationData.id)
                             ToolTip.visible: hovered
                             ToolTip.text: text
                         }
@@ -698,6 +601,7 @@ Maui.PopupPage
                         visible: index < waitingModel.count - 1
                         Layout.fillWidth: true
                         weight: Maui.Separator.Weight.Light
+                    }
                     }
                 }
             }
@@ -760,10 +664,11 @@ Maui.PopupPage
                     }
 
                     const name = control.conflictItemName(conflictDialog.conflictDestination)
+                    const suggestedName = FB.FileOperation.conflictRenameSuggestion(id)
                     close()
                     const dialog = renameConflictDialogComponent.createObject(control, {
                         operationId: id,
-                        initialName: name
+                        initialName: suggestedName || name
                     })
                     dialog.open()
                 }
@@ -789,12 +694,15 @@ Maui.PopupPage
             property string initialName: ""
 
             title: i18nd("mauikitfilebrowsing", "Rename")
-            message: i18nd("mauikitfilebrowsing", "Enter a new name for the copied file.")
+            message: i18nd("mauikitfilebrowsing", "Enter a new name for the file.")
             template.iconSource: "edit-rename"
             textEntry.text: initialName
 
             onOpened: {}
-            onFinished: { FB.FileOperation.renameConflict(operationId, text) }
+            onFinished: (name) =>
+            {
+                Qt.callLater(() => FB.FileOperation.renameConflict(operationId, name))
+            }
             onRejected: { conflictDialog.open() }
         }
     }
@@ -803,7 +711,7 @@ Maui.PopupPage
     {
         target: FB.FileOperation
 
-        function onOperationAdded()
+        function onOperationAdded(id)
         {
             Qt.callLater(control.scheduleDialogOpen)
         }
