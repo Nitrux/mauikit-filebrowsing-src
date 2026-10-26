@@ -582,18 +582,37 @@ void FMList::applyPath(const QUrl &path_, bool addToHistory, bool emitPathChange
 
 void FMList::setPath(const QString &path)
 {
-    const QUrl path_ = QUrl::fromUserInput(path.simplified(), QStringLiteral("/"), QUrl::AssumeLocalFile).adjusted(QUrl::PreferLocalFile | QUrl::StripTrailingSlash | QUrl::NormalizePathSegments);
+    QUrl path_ = QUrl::fromUserInput(path.simplified(), QStringLiteral("/"), QUrl::AssumeLocalFile).adjusted(QUrl::PreferLocalFile | QUrl::StripTrailingSlash | QUrl::NormalizePathSegments);
+    if (!path_.isLocalFile())
+    {
+        path_.setUserName(QString());
+        path_.setPassword(QString());
+    }
     this->applyPath(path_, true, true);
 }
 
 void FMList::redirectPath(const QUrl &from, const QUrl &to)
 {
-    if (this->path != from || this->path == to)
+    QUrl safeFrom = from;
+    if (!safeFrom.isLocalFile())
+    {
+        safeFrom.setUserName(QString());
+        safeFrom.setPassword(QString());
+    }
+
+    QUrl safeTo = to;
+    if (!safeTo.isLocalFile())
+    {
+        safeTo.setUserName(QString());
+        safeTo.setPassword(QString());
+    }
+
+    if (this->path != safeFrom || this->path == safeTo)
         return;
 
     m_suppressReload = true;
-    m_navHistory.replaceLastPath(from, to);
-    this->applyPath(to, false, true);
+    m_navHistory.replaceLastPath(safeFrom, safeTo);
+    this->applyPath(safeTo, false, true);
     m_suppressReload = false;
     QMetaObject::invokeMethod(this, [this]() { this->setList(); }, Qt::QueuedConnection);
 }

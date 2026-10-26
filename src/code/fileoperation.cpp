@@ -1,6 +1,7 @@
 #include "fileoperation.h"
 
 #include <QDir>
+#include <QRegularExpression>
 
 #ifdef KIO_AVAILABLE
 #include <KIO/CopyJob>
@@ -20,7 +21,20 @@ namespace
 {
 QString displayUrl(const QUrl &url)
 {
-    return url.isLocalFile() ? url.toLocalFile() : url.toDisplayString();
+    if (url.isLocalFile())
+        return url.toLocalFile();
+
+    QUrl safeUrl = url;
+    safeUrl.setUserName(QString());
+    safeUrl.setPassword(QString());
+    return safeUrl.toDisplayString();
+}
+
+QString sanitizedErrorMessage(QString message)
+{
+    static const QRegularExpression userInfoPattern(QStringLiteral(R"(([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@)"));
+    message.replace(userInfoPattern, QStringLiteral("\\1"));
+    return message;
 }
 
 QString sourceNameForUrls(const QList<QUrl> &urls)
@@ -271,6 +285,16 @@ bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
                 *errorMessage = QStringLiteral("Could not resume the partial copy");
             return false;
         }
+
+        bool allLocal = operation->destinationUrl.isLocalFile();
+        for (const QUrl &url : operation->urls)
+            allLocal = allLocal && url.isLocalFile();
+        if (allLocal)
+        {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Could not safely copy the local files");
+            return false;
+        }
     }
 
     if (operation->kind == QStringLiteral("move") && checkLocalMoveConflict(operation))
@@ -327,7 +351,7 @@ bool FileOperation::startOperation(Operation *operation, QString *errorMessage)
     {
         QObject::connect(copyJob, &KIO::CopyJob::copyingDone, this, [this, operation](auto *, const QUrl &from, const QUrl &to, const auto &, bool, bool) {
             if (operation->active)
-                Q_EMIT itemFinished(operation->operation, from.toString(), to.toString());
+                Q_EMIT itemFinished(operation->operation, displayUrl(from), displayUrl(to));
         });
     }
 
@@ -435,15 +459,11 @@ bool FileOperation::startLocalCopy(Operation *operation)
 
         const QString destinationRoot = destinationDir.filePath(operation->targetName.isEmpty() ? sourceInfo.fileName() : operation->targetName);
         const QFileInfo destinationRootInfo(destinationRoot);
-        if (QDir::cleanPath(sourceInfo.absoluteFilePath()) == QDir::cleanPath(destinationRootInfo.absoluteFilePath()))
-        {
-            if (!operation->overwriteExisting)
-            {
-                requestConflict(destinationRoot);
-                return false;
-            }
-            continue;
-        }
+        const QString sourcePath = QDir::cleanPath(sourceInfo.absoluteFilePath());
+        const QString destinationPath = QDir::cleanPath(destinationRootInfo.absoluteFilePath());
+        if (sourcePath == destinationPath
+                || (sourceInfo.isDir() && destinationPath.startsWith(sourcePath + QDir::separator())))
+            return false;
 
         if (sourceInfo.isDir())
         {
@@ -552,7 +572,10 @@ bool FileOperation::prepareLocalCopySource(Operation *operation)
     const QString destinationPath = operation->localCopyDestinations.at(operation->localSourceIndex);
     const QString temporaryPath = destinationPath + QStringLiteral(".part");
     const QFileInfo destinationInfo(destinationPath);
-    const bool temporaryExists = QFileInfo::exists(temporaryPath);
+    const QFileInfo temporaryInfo(temporaryPath);
+    if (temporaryInfo.isSymLink() || destinationInfo.isSymLink())
+        return false;
+    const bool temporaryExists = temporaryInfo.exists();
 
     if (destinationInfo.exists() && !temporaryExists && !operation->overwriteExisting)
         return false;
@@ -641,7 +664,7 @@ void FileOperation::processLocalCopy(Operation *operation)
             return;
         }
 
-        Q_EMIT itemFinished(operation->operation, operation->localSourceUrl.toString(), QUrl::fromLocalFile(operation->localDestinationPath).toString());
+        Q_EMIT itemFinished(operation->operation, displayUrl(operation->localSourceUrl), displayUrl(QUrl::fromLocalFile(operation->localDestinationPath)));
         operation->localCompletedBytes += operation->localCurrentSourceSize;
         ++operation->localSourceIndex;
 
@@ -742,7 +765,7 @@ void FileOperation::finishKioOperation(Operation *operation, KJob *job)
     }
 
     const bool success = !operation->cancelRequested && job && job->error() == 0;
-    finishOperation(operation, success, success ? QString() : (job ? job->errorString() : QString()));
+    finishOperation(operation, success, success ? QString() : (job ? sanitizedErrorMessage(job->errorString()) : QString()));
 }
 #endif
 
@@ -1261,7 +1284,10 @@ void FileOperation::renameConflict(int id, const QString &name)
 
     const QString trimmedName = name.trimmed();
     if (trimmedName.isEmpty() || trimmedName == QStringLiteral(".")
-            || trimmedName == QStringLiteral("..") || trimmedName.contains(QLatin1Char('/')))
+            || trimmedName == QStringLiteral("..") || trimmedName.contains(QLatin1Char('/'))
+            || trimmedName.contains(QLatin1Char('\\'))
+            || trimmedName.contains(QChar(0))
+            || trimmedName.contains(QRegularExpression(QStringLiteral("[\\x00-\\x1F\\x7F]"))))
         return;
 
     operation->targetName = trimmedName;

@@ -579,7 +579,12 @@ static const QUrl thumbnailUrl(const QUrl &url, const QString &mimetype)
 #ifdef KIO_AVAILABLE
 const FMH::MODEL FMStatic::getFileInfo(const KFileItem &kfile)
 {
-    const auto itemUrl = kfile.url();
+    QUrl itemUrl = kfile.url();
+    if (!itemUrl.isLocalFile())
+    {
+        itemUrl.setUserName(QString());
+        itemUrl.setPassword(QString());
+    }
 
     return FMH::MODEL {
         {FMH::MODEL_KEY::LABEL, kfile.name()},

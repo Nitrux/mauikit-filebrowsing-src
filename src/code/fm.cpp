@@ -69,6 +69,13 @@ bool isAuthenticationError(const int error)
            || error == KIO::ERR_NEED_PASSWD
            || error == KIO::ERR_USER_CANCELED;
 }
+
+QString sanitizedErrorMessage(QString message)
+{
+    static const QRegularExpression userInfoPattern(QStringLiteral(R"(([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@)"));
+    message.replace(userInfoPattern, QStringLiteral("\\1"));
+    return message;
+}
 }
 
 #else
@@ -266,7 +273,7 @@ FM::FM(QObject *parent)
         if (authenticationError)
             Q_EMIT this->authenticationError();
 
-        Q_EMIT this->warningMessage(job->errorString());
+        Q_EMIT this->warningMessage(sanitizedErrorMessage(job->errorString()));
     });
 
     const static auto packItems = [](const QUrl &directoryUrl, const KFileItemList &items) -> FMH::MODEL_LIST {
