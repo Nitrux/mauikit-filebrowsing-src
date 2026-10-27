@@ -105,8 +105,8 @@ Maui.PopupPage
 
     modal: true
     
-    maxHeight: Maui.Handy.isMobile ? parent.height * 0.95 : 500
-    maxWidth: 700
+    maxHeight: Maui.Handy.isMobile ? parent.height * 0.95 : Maui.Style.units.gridUnit * 30
+    maxWidth: Maui.Style.units.gridUnit * 44
     
     hint: 1
     
@@ -247,9 +247,10 @@ Maui.PopupPage
         message: i18nd("mauikitfilebrowsing", "A file named '%1' already exists!\n This action will overwrite '%1'. Are you sure you want to do this?", control.textField.text)
         template.iconSource: "dialog-warning"
         
-        standardButtons: Dialog.Ok | Dialog.Cancel
+        standardButtons: Dialog.Discard | Dialog.Cancel
+        Component.onCompleted: standardButton(Dialog.Discard).text = i18nd("mauikitfilebrowsing", "Overwrite")
         
-        onAccepted: control.done()
+        onDiscarded: control.done()
         onRejected: close()
     }
     

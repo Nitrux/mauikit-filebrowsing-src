@@ -110,7 +110,7 @@ Maui.PopupPage
         readonly property alias template : _template
         
         hint: 1
-        maxWidth: 350
+        maxWidth: Maui.Style.units.gridUnit * 22
         
         header: Maui.DialogHeader
         {

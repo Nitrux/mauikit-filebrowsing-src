@@ -93,8 +93,8 @@ Maui.PopupPage
 
     hint: 1
 
-    maxHeight: 500
-    maxWidth: 350
+    maxHeight: Maui.Style.units.gridUnit * 30
+    maxWidth: Maui.Style.units.gridUnit * 22
 
     actions: [
 
@@ -120,7 +120,9 @@ Maui.PopupPage
         title: i18nd("mauikitfilebrowsing", "Delete %1", tag)
         message: i18nd("mauikitfilebrowsing", "Are you sure you want to delete this tag? This action can not be undone.")
         template.iconSource: "tag"
-        onAccepted:
+        standardButtons: Dialog.Discard | Dialog.Cancel
+        Component.onCompleted: standardButton(Dialog.Discard).text = i18nd("mauikitfilebrowsing", "Delete")
+        onDiscarded:
         {
             FB.Tagging.removeTag(tag)
             _deleteDialog.close()

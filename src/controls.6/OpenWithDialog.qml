@@ -68,7 +68,7 @@ Maui.PopupPage
     property alias urls : _openWithList.urls
     
     widthHint: 0.9
-    maxWidth: 350
+    maxWidth: Maui.Style.units.gridUnit * 22
     persistent: false
     
     page.title: i18nd("mauikitfilebrowsing", "Open with")
@@ -80,7 +80,7 @@ Maui.PopupPage
     }
     actions: Action
     {
-        Maui.Controls.status: Maui.Controls.Negative
+        Maui.Controls.status: Maui.Controls.Normal
         text: i18n("Cancel")
         onTriggered: control.close()
     }
