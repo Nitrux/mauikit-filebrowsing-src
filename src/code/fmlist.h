@@ -110,7 +110,11 @@ Q_DECLARE_METATYPE(PathStatus)
 struct FILEBROWSING_EXPORT NavHistory {
     void appendPath(const QUrl &path)
     {
+        if (!this->prev_history.isEmpty() && this->prev_history.last() == path)
+            return;
+
         this->prev_history.append(path);
+        this->post_history.clear();
     }
 
     bool replaceLastPath(const QUrl &from, const QUrl &to)
@@ -127,7 +131,9 @@ struct FILEBROWSING_EXPORT NavHistory {
         if (this->post_history.isEmpty())
             return QUrl();
 
-        return this->post_history.takeLast();
+        const auto path = this->post_history.takeLast();
+        this->prev_history.append(path);
+        return path;
     }
 
     QUrl getPreviousPath()
@@ -139,7 +145,7 @@ struct FILEBROWSING_EXPORT NavHistory {
             return this->prev_history.at(0);
 
         this->post_history.append(this->prev_history.takeLast());
-        return this->prev_history.takeLast();
+        return this->prev_history.last();
     }
 
 private:
