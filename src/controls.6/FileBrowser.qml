@@ -749,6 +749,22 @@ Maui.Page
                     return true
                 }
 
+                function pathForDisplay(path)
+                {
+                    const value = String(path || "")
+                    if (!value.startsWith("file://"))
+                        return value
+
+                    try
+                    {
+                        return decodeURIComponent(value.substring(7))
+                    }
+                    catch (error)
+                    {
+                        return value.substring(7)
+                    }
+                }
+
                 function updateValidity()
                 {
                     const names = []
@@ -812,8 +828,7 @@ Maui.Page
                                 path: file.path,
                                 originalName: String(file.label || ""),
                                 newName: String(file.label || ""),
-                                icon: file.icon || "",
-                                thumbnail: file.thumbnail || ""
+                                icon: file.icon || ""
                             })
                         }
                     }
@@ -832,6 +847,8 @@ Maui.Page
                     Layout.fillHeight: true
                     Layout.minimumHeight: 0
                     padding: 0
+                    leftPadding: Maui.Style.contentMargins
+                    rightPadding: Maui.Style.contentMargins
                     bottomPadding: Maui.Style.space.medium
                     spacing: Maui.Style.space.small
 
@@ -846,14 +863,13 @@ Maui.Page
                     {
                         model: renameModel
 
-                        delegate: RowLayout
+                        delegate: ColumnLayout
                         {
                             required property int index
                             required property string path
                             required property string originalName
                             required property string newName
                             required property string icon
-                            required property string thumbnail
                             Layout.fillWidth: true
                             spacing: Maui.Style.space.small
 
@@ -861,9 +877,8 @@ Maui.Page
                             {
                                 Layout.fillWidth: true
                                 text1: originalName
-                                text2: path
+                                text2: batchRenameDialog.pathForDisplay(path)
                                 iconSource: icon
-                                imageSource: thumbnail
                                 iconSizeHint: Maui.Style.iconSizes.medium
                             }
 
