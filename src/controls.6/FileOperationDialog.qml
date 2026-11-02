@@ -136,6 +136,8 @@ Maui.PopupPage
         {
             if (conflictDialog.visible)
             {
+                conflictDialog.closeHandled = true
+                conflictDialog.operationId = -1
                 conflictDialog.close()
             }
             return
@@ -608,78 +610,120 @@ Maui.PopupPage
         }
     }
 
-    Maui.InfoDialog
+    Maui.PopupPage
     {
         id: conflictDialog
         property int operationId: -1
         property string conflictDestination: ""
         property string conflictKind: ""
         property bool canRename: false
-        title: i18nd("mauikitfilebrowsing", "File already exists")
-        message: i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.", control.conflictItemName(conflictDestination))
-        template.iconSource: "dialog-warning"
-        standardButtons: Dialog.NoButton
+        property string conflictMessage: i18nd("mauikitfilebrowsing", "A file named “%1” already exists here.", control.conflictItemName(conflictDestination))
+        property bool closeHandled: false
 
-        onOpened:
+        onClosed:
         {
-            conflictActionButton.forceActiveFocus()
-        }
-
-        onAccepted:
-        {
-            const id = operationId
-            close()
-            FB.FileOperation.resolveConflict(id, true)
-        }
-
-        onRejected:
-        {
-            const id = operationId
-            close()
-            FB.FileOperation.resolveConflict(id, false)
-        }
-
-        RowLayout
-        {
-            Layout.fillWidth: true
-            Layout.topMargin: Maui.Style.space.medium
-            spacing: Maui.Style.space.small
-
-            Button
+            if (closeHandled)
             {
-                id: conflictActionButton
-                Layout.fillWidth: true
-                Layout.preferredWidth: 0
-                focus: true
-                text: replaceConflicts || !conflictDialog.canRename ? i18nd("mauikitfilebrowsing", "Replace") : i18nd("mauikitfilebrowsing", "Rename")
-                Maui.Controls.status: replaceConflicts || !conflictDialog.canRename ? Maui.Controls.Negative : Maui.Controls.Positive
-                highlighted: hovered || activeFocus
-                onClicked:
-                {
-                    const id = conflictDialog.operationId
-                    if (replaceConflicts || !conflictDialog.canRename)
-                    {
-                        conflictDialog.accept()
-                        return
-                    }
-
-                    const name = control.conflictItemName(conflictDialog.conflictDestination)
-                    const suggestedName = FB.FileOperation.conflictRenameSuggestion(id)
-                    close()
-                    const dialog = renameConflictDialogComponent.createObject(control, {
-                        operationId: id,
-                        initialName: suggestedName || name
-                    })
-                    dialog.open()
-                }
+                closeHandled = false
+                return
             }
 
-            Button
+            const id = operationId
+            operationId = -1
+            if (id >= 0)
+                FB.FileOperation.resolveConflict(id, false)
+        }
+
+        widthHint: 0.9
+        maxWidth: Maui.Style.units.gridUnit * 24
+        maxHeight: Maui.Style.units.gridUnit * 32
+        height: Math.min(implicitHeight, maxHeight)
+        title: i18nd("mauikitfilebrowsing", "File already exists")
+        persistent: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        header: Maui.DialogHeader
+        {
+            width: parent ? parent.width : implicitWidth
+            title: conflictDialog.title
+            onCloseRequested: conflictDialog.cancelConflict()
+        }
+
+        actions: [
+            Action
+            {
+                text: i18nd("mauikitfilebrowsing", "Cancel")
+                onTriggered: conflictDialog.cancelConflict()
+            },
+            Action
+            {
+                Maui.Controls.status: replaceConflicts || !conflictDialog.canRename ? Maui.Controls.Negative : Maui.Controls.Positive
+                text: replaceConflicts || !conflictDialog.canRename ? i18nd("mauikitfilebrowsing", "Replace") : i18nd("mauikitfilebrowsing", "Rename")
+                onTriggered: conflictDialog.activatePrimaryAction()
+            }
+        ]
+
+        function cancelConflict()
+        {
+            close()
+        }
+
+        function activatePrimaryAction()
+        {
+            const id = operationId
+            if (replaceConflicts || !canRename)
+            {
+                closeHandled = true
+                operationId = -1
+                close()
+                FB.FileOperation.resolveConflict(id, true)
+                return
+            }
+
+            const name = control.conflictItemName(conflictDestination)
+            const suggestedName = FB.FileOperation.conflictRenameSuggestion(id)
+            closeHandled = true
+            close()
+            const dialog = renameConflictDialogComponent.createObject(control, {
+                operationId: id,
+                initialName: suggestedName || name
+            })
+            dialog.open()
+        }
+
+        stack: Maui.ScrollColumn
+        {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumHeight: 0
+            padding: 0
+            leftPadding: Maui.Style.contentMargins
+            rightPadding: Maui.Style.contentMargins
+            bottomPadding: Maui.Style.space.medium
+            spacing: Maui.Style.space.small
+
+            RowLayout
             {
                 Layout.fillWidth: true
-                Layout.preferredWidth: 0
-                text: i18nd("mauikitfilebrowsing", "Cancel")
-                onClicked: conflictDialog.reject()
+                spacing: Maui.Style.space.small
+
+                Maui.IconItem
+                {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: 64
+                    Layout.preferredHeight: 64
+                    iconSource: "dialog-warning"
+                    iconSizeHint: 64
+                }
+
+                Label
+                {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    text: conflictDialog.conflictMessage
+                    color: Maui.Theme.textColor
+                    wrapMode: Text.WordWrap
+                }
             }
         }
     }
