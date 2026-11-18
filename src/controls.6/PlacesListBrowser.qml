@@ -206,6 +206,7 @@ Maui.ListBrowser
         iconSize: control.iconSize
         labelVisible: true
         iconVisible: true
+        isCurrentItem: control.currentPath === model.path
         label: model.label
         iconName: model.icon
         visible: !hiddenPlace
