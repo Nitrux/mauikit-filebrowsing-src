@@ -320,7 +320,7 @@ PathStatus FMList::emptyStateStatus() const
 
     return {PathStatus::STATUS_CODE::READY,
             i18n("Nothing here!"),
-            i18n("This place seems to be empty"),
+            i18n("This place seems to be empty."),
             QStringLiteral("folder-add"),
             true,
             true};
