@@ -20,6 +20,7 @@
 
 #include <QObject>
 #include <QModelIndex>
+#include <QPersistentModelIndex>
 #include <QHash>
 #include <QQmlEngine>
 
@@ -150,7 +151,7 @@ private:
 
     QVariantList groups;
 
-    QHash<QString, QModelIndex> m_devices;
+    QHash<QString, QPersistentModelIndex> m_devices;
     bool listUpdatePending = false;
 
     FMH::MODEL_LIST getGroup(const KFilePlacesModel &model, const FMStatic::PATHTYPE_KEY &type);

@@ -68,12 +68,15 @@ PlacesList::PlacesList(QObject *parent)
     connect(this->model, &KFilePlacesModel::reloaded, this, &PlacesList::scheduleSetList);
     
     connect(this->model, &KFilePlacesModel::setupDone, this, &PlacesList::scheduleSetList);
+    connect(this->model, &KFilePlacesModel::rowsRemoved, this, &PlacesList::scheduleSetList);
 
-    connect(this->model, &KFilePlacesModel::teardownDone, this, [this](const QModelIndex &, Solid::ErrorType, const QVariant &) {
+    connect(this->model, &KFilePlacesModel::teardownDone, this, [this](const QModelIndex &index, Solid::ErrorType error, const QVariant &errorData) {
+        qWarning() << "Device unmount completed:" << index << "error:" << static_cast<int>(error) << "details:" << errorData;
         this->scheduleSetList();
     });
 
     connect(this->model, &KFilePlacesModel::errorMessage, this, [this](const QString &message) {
+        qWarning() << "Device operation error:" << message;
         Q_EMIT this->operationError(message);
     });
     
@@ -216,9 +219,8 @@ void PlacesList::scheduleSetList()
 
 void PlacesList::setList()
 {
-    this->list.clear();
-    
-    Q_EMIT this->preListChanged();
+    FMH::MODEL_LIST updatedList;
+    this->m_devices.clear();
     
     if (!this->groups.isEmpty())
     {
@@ -226,36 +228,41 @@ void PlacesList::setList()
         {
             switch (group.toInt()) {
             case FMStatic::PATHTYPE_KEY::PLACES_PATH:
-                this->list << getGroup(*this->model, FMStatic::PATHTYPE_KEY::PLACES_PATH);
+                updatedList << getGroup(*this->model, FMStatic::PATHTYPE_KEY::PLACES_PATH);
                 break;
 
             case FMStatic::PATHTYPE_KEY::BOOKMARKS_PATH:
-                this->list << getGroup(*this->model, FMStatic::PATHTYPE_KEY::BOOKMARKS_PATH);
+                updatedList << getGroup(*this->model, FMStatic::PATHTYPE_KEY::BOOKMARKS_PATH);
                 break;
 
             case FMStatic::PATHTYPE_KEY::QUICK_PATH:
-                this->list << getGroup(*this->model, FMStatic::PATHTYPE_KEY::QUICK_PATH);
+                updatedList << getGroup(*this->model, FMStatic::PATHTYPE_KEY::QUICK_PATH);
                 break;
 
             case FMStatic::PATHTYPE_KEY::DRIVES_PATH:
-                this->list << getGroup(*this->model, FMStatic::PATHTYPE_KEY::DRIVES_PATH);
+                updatedList << getGroup(*this->model, FMStatic::PATHTYPE_KEY::DRIVES_PATH);
                 break;
 
             case FMStatic::PATHTYPE_KEY::REMOTE_PATH:
-                this->list << getGroup(*this->model, FMStatic::PATHTYPE_KEY::REMOTE_PATH);
+                updatedList << getGroup(*this->model, FMStatic::PATHTYPE_KEY::REMOTE_PATH);
                 break;
 
             case FMStatic::PATHTYPE_KEY::REMOVABLE_PATH:
-                this->list << getGroup(*this->model, FMStatic::PATHTYPE_KEY::REMOVABLE_PATH);
+                updatedList << getGroup(*this->model, FMStatic::PATHTYPE_KEY::REMOVABLE_PATH);
                 break;
 
             case FMStatic::PATHTYPE_KEY::TAGS_PATH:
-                this->list << Tagging::getInstance()->getTags();
+                updatedList << Tagging::getInstance()->getTags();
                 break;
             }
         }
     }
     
+    if (this->list == updatedList)
+        return;
+
+    Q_EMIT this->preListChanged();
+    this->list = std::move(updatedList);
     Q_EMIT this->postListChanged();
     Q_EMIT this->countChanged();
 }
@@ -357,13 +364,21 @@ void PlacesList::requestSetup(const int &index)
 void PlacesList::requestTeardown(const int &index)
 {
     if (index >= this->list.size() || index < 0)
+    {
+        qWarning() << "Device unmount requested with invalid list index:" << index;
         return;
+    }
 
 #ifdef KIO_AVAILABLE
     const auto item = this->list.at(index);
     if(m_devices.contains(item[FMH::MODEL_KEY::UDI]))
     {
-        this->model->requestTeardown(m_devices.value(item[FMH::MODEL_KEY::UDI]));
+        const auto deviceIndex = m_devices.value(item[FMH::MODEL_KEY::UDI]);
+        qWarning() << "Requesting device unmount:" << item[FMH::MODEL_KEY::UDI] << "model index:" << deviceIndex;
+        this->model->requestTeardown(deviceIndex);
+    } else
+    {
+        qWarning() << "Device unmount requested without a matching device:" << index << item[FMH::MODEL_KEY::UDI];
     }
 #endif
 }
