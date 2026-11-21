@@ -291,7 +291,9 @@ Maui.PopupPage
                     list.groups: [
                         FB.FMList.BOOKMARKS_PATH,
                         FB.FMList.REMOTE_PATH,
-                        FB.FMList.CLOUD_PATH]
+                        FB.FMList.CLOUD_PATH,
+                        FB.FMList.REMOVABLE_PATH,
+                        FB.FMList.DRIVES_PATH]
                 }
             }
 
