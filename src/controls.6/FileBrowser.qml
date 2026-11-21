@@ -633,29 +633,31 @@ Maui.Page
         Maui.InputDialog
         {
             id: _newDialog
+            property bool selectionMade: false
+            property bool createFile: false
+
+            textEntry.onTextChanged: {
+                if (!selectionMade)
+                    createFile = textEntry.text.indexOf(".") >= 0
+            }
+
             onClosed:
             {
                 control.restoreBrowserFocus()
                 destroy()
             }
-            title: _newDirOp.checked ? i18nd("mauikitfilebrowsing", "New folder") : i18nd("mauikitfilebrowsing", "New file")
+            title: createFile ? i18nd("mauikitfilebrowsing", "New file") : i18nd("mauikitfilebrowsing", "New folder")
             message: i18nd("mauikitfilebrowsing", "Create a new folder or a file with a custom name.")
 
-            template.iconSource: _newDirOp.checked ? "folder" : FB.FM.getIconName(textEntry.text)
+            template.iconSource: createFile ? FB.FM.getIconName(textEntry.text) : "folder"
             template.iconVisible: true
 
             onFinished: (text) =>
                         {
-                            if(_newDirOp.checked)
-                            {
-                                control.currentFMList.createDir(text)
-                                return
-                            }
-                            if(_newFileOp.checked)
-                            {
+                            if (createFile)
                                 control.currentFMList.createFile(text)
-                                return
-                            }
+                            else
+                                control.currentFMList.createDir(text)
                         }
 
             textEntry.placeholderText: i18nd("mauikitfilebrowsing", "Name")
@@ -672,7 +674,12 @@ Maui.Page
                     id: _newDirOp
                     icon.name: "folder-new"
                     text: i18nd("mauikitfilebrowsing", "Folder")
-                    checked: String(_newDialog.textEntry.text).indexOf(".") < 0
+                    checkable: true
+                    checked: !_newDialog.createFile
+                    onTriggered: {
+                        _newDialog.selectionMade = true
+                        _newDialog.createFile = false
+                    }
                 }
 
                 Action
@@ -680,7 +687,12 @@ Maui.Page
                     id: _newFileOp
                     icon.name: "document-new"
                     text: i18nd("mauikitfilebrowsing", "File")
-                    checked: String(_newDialog.textEntry.text).indexOf(".") >= 0
+                    checkable: true
+                    checked: _newDialog.createFile
+                    onTriggered: {
+                        _newDialog.selectionMade = true
+                        _newDialog.createFile = true
+                    }
                 }
             }
         }

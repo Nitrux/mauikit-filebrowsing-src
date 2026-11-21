@@ -435,6 +435,8 @@ Maui.PopupPage
                                 iconSizeHint: Maui.Style.iconSizes.medium
                                 label3.font: Maui.Style.defaultFont
                                 label3.opacity: 1
+                                rightLabels.Layout.fillWidth: false
+                                rightLabels.Layout.minimumWidth: Math.min(label3.implicitWidth, width / 2)
                             }
 
                             RowLayout
@@ -571,6 +573,8 @@ Maui.PopupPage
                             iconSizeHint: Maui.Style.iconSizes.small
                             label3.font: Maui.Style.defaultFont
                             label3.opacity: 1
+                            rightLabels.Layout.fillWidth: false
+                            rightLabels.Layout.minimumWidth: Math.min(label3.implicitWidth, width / 2)
                         }
 
                     RowLayout

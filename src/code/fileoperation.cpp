@@ -17,6 +17,8 @@
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QTimer>
+#include <QFutureWatcher>
+#include <QtConcurrentRun>
 #endif
 
 #include <QVariantMap>
@@ -52,6 +54,13 @@ QString sourceNameForUrls(const QList<QUrl> &urls)
 }
 
 #ifdef KIO_AVAILABLE
+struct LocalCopyChunk
+{
+    qint64 bytes = 0;
+    bool finished = false;
+    QString error;
+};
+
 bool openLocalFileWithoutFollowingSymlink(QFile &file, const QString &path, QIODevice::OpenMode mode, bool createNew)
 {
 #if defined(Q_OS_UNIX) && defined(O_NOFOLLOW)
@@ -144,6 +153,7 @@ struct FileOperation::Operation
 #ifdef KIO_AVAILABLE
     KJob *job = nullptr;
     QTimer *localTimer = nullptr;
+    QFutureWatcher<LocalCopyChunk> *localWatcher = nullptr;
     QTimer *pauseTimer = nullptr;
     QFile localSource;
     QFile localDestination;
@@ -175,6 +185,8 @@ FileOperation::~FileOperation()
 #ifdef KIO_AVAILABLE
         if (operation->localTimer)
             operation->localTimer->stop();
+        if (operation->localWatcher)
+            operation->localWatcher->waitForFinished();
         if (operation->pauseTimer)
             operation->pauseTimer->stop();
         operation->localSource.close();
@@ -695,65 +707,84 @@ void FileOperation::processLocalCopy(Operation *operation)
         return;
     }
 
-    constexpr qint64 copyChunkSize = 1024 * 1024;
-    const QByteArray data = operation->localSource.read(copyChunkSize);
-    if (data.isEmpty())
-    {
-        if (operation->localSource.error() != QFile::NoError)
+    // QFile reads and writes can block for a long time on slow or removable
+    // media. Keep them off the thread that drives the interface.
+    auto *watcher = new QFutureWatcher<LocalCopyChunk>(this);
+    operation->localWatcher = watcher;
+    connect(watcher, &QFutureWatcher<LocalCopyChunk>::finished, this, [this, operation, watcher]() {
+        const LocalCopyChunk chunk = watcher->result();
+        operation->localWatcher = nullptr;
+        watcher->deleteLater();
+
+        if (operation->cancelRequested)
         {
-            finishLocalCopy(operation, false, operation->localSource.errorString());
+            finishLocalCopy(operation, false, QString());
             return;
         }
-
-        if (!operation->localDestination.flush())
+        if (!chunk.error.isEmpty())
         {
-            finishLocalCopy(operation, false, operation->localDestination.errorString());
+            finishLocalCopy(operation, false, chunk.error);
             return;
         }
-
-        operation->localSource.close();
-        operation->localDestination.close();
-        if (!QFile::rename(operation->localTemporaryPath, operation->localDestinationPath))
+        if (chunk.finished)
         {
-            finishLocalCopy(operation, false, QStringLiteral("Could not finalize the copied file"));
-            return;
+            operation->localSource.close();
+            operation->localDestination.close();
+            if (!QFile::rename(operation->localTemporaryPath, operation->localDestinationPath))
+            {
+                finishLocalCopy(operation, false, QStringLiteral("Could not finalize the copied file"));
+                return;
+            }
+
+            Q_EMIT itemFinished(operation->operation, displayUrl(operation->localSourceUrl), displayUrl(QUrl::fromLocalFile(operation->localDestinationPath)));
+            operation->localCompletedBytes += operation->localCurrentSourceSize;
+            ++operation->localSourceIndex;
+            if (operation->localSourceIndex >= operation->localCopySources.size())
+            {
+                finishLocalCopy(operation, true, QString());
+                return;
+            }
+            if (!prepareLocalCopySource(operation))
+            {
+                finishLocalCopy(operation, false, QStringLiteral("Could not prepare the next file"));
+                return;
+            }
         }
-
-        Q_EMIT itemFinished(operation->operation, displayUrl(operation->localSourceUrl), displayUrl(QUrl::fromLocalFile(operation->localDestinationPath)));
-        operation->localCompletedBytes += operation->localCurrentSourceSize;
-        ++operation->localSourceIndex;
-
-        if (operation->localSourceIndex >= operation->localCopySources.size())
+        else
         {
-            finishLocalCopy(operation, true, QString());
-            return;
-        }
-
-        if (!prepareLocalCopySource(operation))
-        {
-            finishLocalCopy(operation, false, QStringLiteral("Could not prepare the next file"));
-            return;
+            operation->processedBytes += static_cast<qulonglong>(chunk.bytes);
+            operation->progress = operation->totalBytes > 0 ? static_cast<int>((operation->processedBytes * 100) / operation->totalBytes) : 0;
+            const qint64 elapsed = operation->localElapsed.elapsed();
+            if (elapsed > 0)
+                operation->speed = (operation->processedBytes * 1000) / static_cast<qulonglong>(elapsed);
         }
 
         notifyOperationsChanged();
-        operation->localTimer->start(0);
-        return;
-    }
+        if (!operation->paused)
+            operation->localTimer->start(0);
+    });
 
-    if (operation->localDestination.write(data) != data.size())
-    {
-        finishLocalCopy(operation, false, operation->localDestination.errorString());
-        return;
-    }
-
-    operation->processedBytes += static_cast<qulonglong>(data.size());
-    operation->progress = operation->totalBytes > 0 ? static_cast<int>((operation->processedBytes * 100) / operation->totalBytes) : 0;
-    const qint64 elapsed = operation->localElapsed.elapsed();
-    if (elapsed > 0)
-        operation->speed = (operation->processedBytes * 1000) / static_cast<qulonglong>(elapsed);
-
-    notifyOperationsChanged();
-    operation->localTimer->start(0);
+    QFile *source = &operation->localSource;
+    QFile *destination = &operation->localDestination;
+    watcher->setFuture(QtConcurrent::run([source, destination]() {
+        LocalCopyChunk result;
+        constexpr qint64 copyChunkSize = 1024 * 1024;
+        const QByteArray data = source->read(copyChunkSize);
+        if (data.isEmpty())
+        {
+            if (source->error() != QFile::NoError)
+                result.error = source->errorString();
+            else if (!destination->flush())
+                result.error = destination->errorString();
+            else
+                result.finished = true;
+        }
+        else if (destination->write(data) != data.size())
+            result.error = destination->errorString();
+        else
+            result.bytes = data.size();
+        return result;
+    }));
 }
 
 void FileOperation::finishLocalCopy(Operation *operation, bool success, const QString &errorMessage)
@@ -1165,6 +1196,8 @@ void FileOperation::cancelOperation(int id)
 #ifdef KIO_AVAILABLE
     if (operation->localCopyActive)
     {
+        if (operation->localWatcher)
+            return;
         finishLocalCopy(operation, false, QString());
         return;
     }
@@ -1274,7 +1307,8 @@ bool FileOperation::resumeOperation(int id)
     if (operation->localCopyActive)
     {
         operation->paused = false;
-        operation->localTimer->start(0);
+        if (!operation->localWatcher)
+            operation->localTimer->start(0);
         notifyOperationsChanged();
         return true;
     }
