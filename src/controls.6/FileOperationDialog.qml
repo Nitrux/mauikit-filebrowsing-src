@@ -34,7 +34,7 @@ Maui.PopupPage
     height: Math.min(implicitHeight, maxHeight)
     modal: false
     persistent: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnReleaseOutside
 
     enter: Transition
     {
