@@ -23,14 +23,28 @@ Loader
     property var quickPlaces: null
     property bool quickPlacesEnabled: true
     property bool showStoragePartitions: true
+    property bool mountRemovableOnClick: false
+    property string pendingMountUdi
+    property string pendingMountFallbackPath
+    property int pendingMountModifiers: Qt.NoModifier
+    property var deviceReturnPaths: ({})
+    property var deviceMountPaths: ({})
     property string currentPath
+    property string lastObservedPath
     property string currentQuickPath
     property var hiddenPaths: []
 
     signal placeClicked(string path, var mouse)
     signal contextMenuRequested(string path, string type, int index)
     signal deviceUnmounting(string label)
+    signal devicePathUnavailable(string fallbackPath)
     signal operationError(string message)
+
+    function positionAtBeginning()
+    {
+        if (item && item.contentItem && item.contentItem.flickable)
+            item.contentItem.flickable.positionViewAtBeginning()
+    }
 
     function isRootPath(path)
     {
@@ -91,6 +105,62 @@ Loader
         return showStoragePartitions && control.list && control.list.isDevice(index)
     }
 
+    function isLocationWithin(path, rootPath)
+    {
+        let location = String(path || "")
+        let root = String(rootPath || "")
+        while (location.endsWith("/") && location.length > 8)
+            location = location.slice(0, -1)
+        while (root.endsWith("/") && root.length > 8)
+            root = root.slice(0, -1)
+        return location === root || location.startsWith(root + "/")
+    }
+
+    function requestDeviceSetup(index, udi, modifiers)
+    {
+        pendingMountUdi = String(udi)
+        pendingMountFallbackPath = currentPath
+        pendingMountModifiers = modifiers === undefined ? Qt.NoModifier : modifiers
+        list.requestSetup(index)
+    }
+
+    function rememberDeviceMountPaths()
+    {
+        if (!list)
+            return
+
+        for (let i = 0; i < list.count; ++i)
+        {
+            const place = list.get(i)
+            if (list.isDevice(i) && isExternalDeviceSection(place.type) && !list.setupNeeded(i))
+                deviceMountPaths[String(place.udi)] = String(place.path)
+        }
+    }
+
+    onCurrentPathChanged:
+    {
+        const previousPath = String(lastObservedPath || "")
+        const nextPath = String(currentPath || "")
+
+        if (previousPath.length > 0 && nextPath.length > 0 && previousPath !== nextPath && list)
+        {
+            for (let i = 0; i < list.count; ++i)
+            {
+                const place = list.get(i)
+                if (list.isDevice(i) && isExternalDeviceSection(place.type) && !list.setupNeeded(i)
+                        && isLocationWithin(nextPath, place.path)
+                        && !isLocationWithin(previousPath, place.path))
+                {
+                    const udi = String(place.udi)
+                    deviceReturnPaths[udi] = previousPath
+                    deviceMountPaths[udi] = String(place.path)
+                }
+            }
+        }
+
+        lastObservedPath = nextPath
+    }
+
     function isPathHidden(path)
     {
         const candidate = path ? path.toString() : ""
@@ -133,11 +203,11 @@ Loader
             holder.visible: count === 0
             holder.title: i18n("Bookmarks")
             holder.body: i18n("Your bookmarks will be listed here")
-            currentIndex: control.currentPath.length > 0 ? placesList.indexOfPath(control.currentPath) : -1
-
             Component.onCompleted:
             {
                 flickable.highlightFollowsCurrentItem = false
+                control.lastObservedPath = control.currentPath
+                control.rememberDeviceMountPaths()
                 Qt.callLater(() => flickable.positionViewAtBeginning())
             }
 
@@ -162,9 +232,51 @@ Loader
             Connections
             {
                 target: placesList
+                function onPostListChanged()
+                {
+                    control.rememberDeviceMountPaths()
+                }
+
                 function onOperationError(message)
                 {
+                    control.pendingMountUdi = ""
+                    control.pendingMountFallbackPath = ""
                     control.operationError(message)
+                }
+
+                function onDeviceSetupDone(udi, path)
+                {
+                    if (String(udi) !== control.pendingMountUdi)
+                        return
+
+                    if (!control.mountRemovableOnClick)
+                    {
+                        control.pendingMountUdi = ""
+                        control.pendingMountFallbackPath = ""
+                        return
+                    }
+
+                    const deviceId = control.pendingMountUdi
+                    const modifiers = control.pendingMountModifiers
+                    control.deviceReturnPaths[deviceId] = control.pendingMountFallbackPath
+                    control.deviceMountPaths[deviceId] = String(path)
+                    control.pendingMountUdi = ""
+                    control.pendingMountFallbackPath = ""
+                    control.placeClicked(String(path), {modifiers: modifiers})
+                }
+
+                function onDeviceUnavailable(udi, path)
+                {
+                    const deviceId = String(udi)
+                    const mountPath = control.deviceMountPaths[deviceId] || path
+                    const fallbackPath = control.deviceReturnPaths[deviceId] || ""
+                    delete control.deviceMountPaths[deviceId]
+                    delete control.deviceReturnPaths[deviceId]
+
+                    if (!control.isLocationWithin(control.currentPath, mountPath))
+                        return
+
+                    control.devicePathUnavailable(control.isLocationWithin(fallbackPath, mountPath) ? "" : fallbackPath)
                 }
             }
 
@@ -226,7 +338,12 @@ Loader
                                 labelsVisible: false
                                 tooltipText: placeLabel
 
-                                onClicked: (mouse) => control.placeClicked(placePath, mouse)
+                                onClicked: (mouse) =>
+                                {
+                                    control.pendingMountUdi = ""
+                                    control.pendingMountFallbackPath = ""
+                                    control.placeClicked(placePath, mouse)
+                                }
                                 onRightClicked: control.contextMenuRequested(placePath, placeType, -1)
                                 onPressAndHold: control.contextMenuRequested(placePath, placeType, -1)
                             }
@@ -264,9 +381,10 @@ Loader
                     onClicked:
                     {
                         if (placesList.setupNeeded(index))
-                            placesList.requestSetup(index)
+                            control.requestDeviceSetup(index, model.udi, Qt.NoModifier)
                         else
                         {
+                            control.deviceMountPaths[String(model.udi)] = String(model.path)
                             unmountDialog.deviceIndex = index
                             unmountDialog.deviceLabel = model.label
                             unmountDialog.open()
@@ -274,7 +392,27 @@ Loader
                     }
                 }
 
-                onClicked: (mouse) => control.placeClicked(model.path, mouse)
+                onClicked: (mouse) =>
+                {
+                    if (control.mountRemovableOnClick
+                            && placesList.isDevice(index)
+                            && control.isExternalDeviceSection(model.type)
+                            && placesList.setupNeeded(index))
+                    {
+                        control.requestDeviceSetup(index, model.udi, mouse.modifiers)
+                        return
+                    }
+
+                    control.pendingMountUdi = ""
+                    control.pendingMountFallbackPath = ""
+                    if (control.mountRemovableOnClick && placesList.isDevice(index) && control.isExternalDeviceSection(model.type))
+                    {
+                        control.deviceMountPaths[String(model.udi)] = String(model.path)
+                        if (!control.isLocationWithin(control.currentPath, model.path))
+                            control.deviceReturnPaths[String(model.udi)] = control.currentPath
+                    }
+                    control.placeClicked(model.path, mouse)
+                }
                 onRightClicked: control.contextMenuRequested(model.path, String(model.type), index)
                 onPressAndHold: control.contextMenuRequested(model.path, String(model.type), index)
             }

@@ -169,4 +169,6 @@ Q_SIGNALS:
      * @param message the backend error message
      */
     void operationError(const QString &message);
+    void deviceSetupDone(const QString &udi, const QString &path);
+    void deviceUnavailable(const QString &udi, const QString &path);
 };

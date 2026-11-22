@@ -283,8 +283,10 @@ Maui.PopupPage
                     anchors.fill: parent
                     Maui.Theme.colorSet: Maui.Theme.Window
                     hiddenPaths: control.hiddenSidebarPaths
+                    mountRemovableOnClick: true
 
                     onPlaceClicked: (path) => _browser.openFolder(path)
+                    onDevicePathUnavailable: (fallbackPath) => _browser.openFolder(fallbackPath.length > 0 ? fallbackPath : FB.FM.homePath())
                     currentPath: _browser.currentPath
 
                 }

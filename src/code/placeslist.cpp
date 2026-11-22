@@ -19,6 +19,8 @@
 #include "placeslist.h"
 #include "tagging.h"
 
+#include <algorithm>
+
 #include <QDir>
 #include <QDebug>
 #include <QDBusConnection>
@@ -67,12 +69,34 @@ PlacesList::PlacesList(QObject *parent)
 #ifdef KIO_AVAILABLE
     connect(this->model, &KFilePlacesModel::reloaded, this, &PlacesList::scheduleSetList);
     
-    connect(this->model, &KFilePlacesModel::setupDone, this, &PlacesList::scheduleSetList);
+    connect(this->model, &KFilePlacesModel::setupDone, this, [this](const QModelIndex &index, bool success) {
+        const QString udi = this->model->deviceForIndex(index).udi();
+        const QString path = this->model->url(index).toString();
+        this->scheduleSetList();
+
+        if (success)
+        {
+            QTimer::singleShot(0, this, [this, udi, path]() {
+                Q_EMIT this->deviceSetupDone(udi, path);
+            });
+        }
+    });
     connect(this->model, &KFilePlacesModel::rowsRemoved, this, &PlacesList::scheduleSetList);
 
     connect(this->model, &KFilePlacesModel::teardownDone, this, [this](const QModelIndex &index, Solid::ErrorType error, const QVariant &errorData) {
         qWarning() << "Device unmount completed:" << index << "error:" << static_cast<int>(error) << "details:" << errorData;
+        const QString udi = this->model->deviceForIndex(index).udi();
+        const QString path = this->model->url(index).toString();
+        const QPersistentModelIndex persistentIndex(index);
         this->scheduleSetList();
+
+        if (error == Solid::NoError)
+        {
+            QTimer::singleShot(0, this, [this, persistentIndex, udi, path]() {
+                if (persistentIndex.isValid() && this->model->setupNeeded(persistentIndex))
+                    Q_EMIT this->deviceUnavailable(udi, path);
+            });
+        }
     });
 
     connect(this->model, &KFilePlacesModel::errorMessage, this, [this](const QString &message) {
@@ -219,6 +243,8 @@ void PlacesList::scheduleSetList()
 
 void PlacesList::setList()
 {
+    const auto previousList = this->list;
+    const auto previousDevices = this->m_devices;
     FMH::MODEL_LIST updatedList;
     this->m_devices.clear();
     
@@ -261,10 +287,30 @@ void PlacesList::setList()
     if (this->list == updatedList)
         return;
 
+    QList<QPair<QString, QString>> removedDevices;
+    for (const auto &previousPlace : previousList)
+    {
+        if (previousPlace[FMH::MODEL_KEY::TYPE] != FMStatic::PathTypeLabel(FMStatic::PATHTYPE_KEY::REMOVABLE_PATH))
+            continue;
+
+        const auto udi = previousPlace[FMH::MODEL_KEY::UDI];
+        if (udi.isEmpty() || !previousDevices.contains(udi) || previousDevices.value(udi).isValid())
+            continue;
+
+        const bool stillPresent = std::any_of(updatedList.cbegin(), updatedList.cend(), [&udi](const FMH::MODEL &place) {
+            return place[FMH::MODEL_KEY::UDI] == udi;
+        });
+        if (!stillPresent)
+            removedDevices.append({udi, previousPlace[FMH::MODEL_KEY::PATH]});
+    }
+
     Q_EMIT this->preListChanged();
     this->list = std::move(updatedList);
     Q_EMIT this->postListChanged();
     Q_EMIT this->countChanged();
+
+    for (const auto &device : std::as_const(removedDevices))
+        Q_EMIT this->deviceUnavailable(device.first, device.second);
 }
 
 QVariantList PlacesList::getGroups() const
