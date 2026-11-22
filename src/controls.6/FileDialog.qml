@@ -147,8 +147,7 @@ Maui.PopupPage
      */
     readonly property var hiddenSidebarPaths : [
         "tags:///fav",
-        "tags:///",
-        "file:///"
+        "tags:///"
     ]
     
     /**
@@ -261,8 +260,8 @@ Maui.PopupPage
         Layout.fillHeight: true
         Layout.fillWidth: true
         
-        sideBar.preferredWidth: 200
-        sideBar.minimumWidth: 200
+        sideBar.preferredWidth: Maui.Style.units.gridUnit * 12
+        sideBar.minimumWidth: Maui.Style.units.gridUnit * 12
         sideBarContent: Pane
         {
             padding: 0
@@ -279,7 +278,7 @@ Maui.PopupPage
             {
                 id: defaultSidebarComponent
 
-                FB.PlacesListBrowser
+                FB.PlacesSideBar
                 {
                     anchors.fill: parent
                     Maui.Theme.colorSet: Maui.Theme.Window
@@ -288,12 +287,6 @@ Maui.PopupPage
                     onPlaceClicked: (path) => _browser.openFolder(path)
                     currentPath: _browser.currentPath
 
-                    list.groups: [
-                        FB.FMList.BOOKMARKS_PATH,
-                        FB.FMList.REMOTE_PATH,
-                        FB.FMList.CLOUD_PATH,
-                        FB.FMList.REMOVABLE_PATH,
-                        FB.FMList.DRIVES_PATH]
                 }
             }
 

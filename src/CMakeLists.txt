@@ -122,6 +122,7 @@ ecm_target_qml_sources(MauiKitFileBrowsing${MAUI_MAJOR_VERSION} SOURCES
     controls.${QT_MAJOR_VERSION}/NetworkServerDelegate.qml
     controls.${QT_MAJOR_VERSION}/NewTagDialog.qml
     controls.${QT_MAJOR_VERSION}/PlacesListBrowser.qml
+    controls.${QT_MAJOR_VERSION}/PlacesSideBar.qml
     controls.${QT_MAJOR_VERSION}/TagsDialog.qml
     controls.${QT_MAJOR_VERSION}/TagsBar.qml)
 
