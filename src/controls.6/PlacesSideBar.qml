@@ -15,10 +15,22 @@ Loader
     focus: false
 
     readonly property var list: item && item.list ? item.list : null
+    property var groups: [
+        FB.FMList.BOOKMARKS_PATH,
+        FB.FMList.REMOTE_PATH,
+        FB.FMList.REMOVABLE_PATH,
+        FB.FMList.DRIVES_PATH]
+    property var quickPlaces: null
+    property bool quickPlacesEnabled: true
+    property bool showStoragePartitions: true
     property string currentPath
+    property string currentQuickPath
     property var hiddenPaths: []
 
-    signal placeClicked(string path)
+    signal placeClicked(string path, var mouse)
+    signal contextMenuRequested(string path, string type, int index)
+    signal deviceUnmounting(string label)
+    signal operationError(string message)
 
     function isRootPath(path)
     {
@@ -71,6 +83,14 @@ Loader
         return String(type) === i18nd("mauikitfilebrowsing", "Removable")
     }
 
+    function shouldShowPlace(index, type, path)
+    {
+        if (!isStorageSection(type) || isRootPath(path))
+            return true
+
+        return showStoragePartitions && control.list && control.list.isDevice(index)
+    }
+
     function isPathHidden(path)
     {
         const candidate = path ? path.toString() : ""
@@ -110,16 +130,41 @@ Loader
 
             readonly property alias list: placesList
 
+            holder.visible: count === 0
+            holder.title: i18n("Bookmarks")
+            holder.body: i18n("Your bookmarks will be listed here")
+            currentIndex: control.currentPath.length > 0 ? placesList.indexOfPath(control.currentPath) : -1
+
+            Component.onCompleted:
+            {
+                flickable.highlightFollowsCurrentItem = false
+                Qt.callLater(() => flickable.positionViewAtBeginning())
+            }
+
             model: Maui.BaseModel
             {
                 list: FB.PlacesList
                 {
                     id: placesList
-                    groups: [
-                        FB.FMList.BOOKMARKS_PATH,
-                        FB.FMList.REMOTE_PATH,
-                        FB.FMList.REMOVABLE_PATH,
-                        FB.FMList.DRIVES_PATH]
+                    groups: control.groups
+                }
+            }
+
+            Maui.BaseModel
+            {
+                id: quickPlacesModel
+                list: FB.PlacesList
+                {
+                    groups: [FB.FMList.QUICK_PATH, FB.FMList.PLACES_PATH]
+                }
+            }
+
+            Connections
+            {
+                target: placesList
+                function onOperationError(message)
+                {
+                    control.operationError(message)
                 }
             }
 
@@ -134,6 +179,15 @@ Loader
                     Layout.fillWidth: true
                     Layout.bottomMargin: Maui.Style.space.medium
                     height: implicitHeight + listBrowser.spacing * 2
+                    active: control.quickPlacesEnabled
+
+                    OpacityAnimator on opacity
+                    {
+                        from: 0
+                        to: 1
+                        duration: Maui.Style.units.longDuration
+                        running: parent.status === Loader.Ready
+                    }
 
                     sourceComponent: GridLayout
                     {
@@ -144,33 +198,37 @@ Loader
 
                         Repeater
                         {
-                            model: Maui.BaseModel
-                            {
-                                list: FB.PlacesList
-                                {
-                                    groups: [FB.FMList.QUICK_PATH, FB.FMList.PLACES_PATH]
-                                }
-                            }
+                            model: control.quickPlaces === null ? quickPlacesModel : control.quickPlaces
 
                             delegate: Maui.GridBrowserDelegate
                             {
+                                readonly property var placeData: modelData === undefined ? model : modelData
+                                readonly property string placePath: String(placeData.path)
+                                readonly property string placeType: placeData.type === undefined ? "" : String(placeData.type)
+                                readonly property string placeLabel: String(placeData.label)
+                                readonly property string placeIconName: placeData.icon === undefined ? "" : String(placeData.icon)
+                                readonly property bool hiddenPlace: control.isPathHidden(placePath)
+
                                 Maui.Theme.colorSet: Maui.Theme.Button
                                 Maui.Theme.inherit: false
-
-                                readonly property bool hiddenPlace: control.isPathHidden(model.path)
                                 Layout.preferredHeight: hiddenPlace ? 0 : Math.min(50, width)
                                 Layout.preferredWidth: hiddenPlace ? 0 : 50
                                 Layout.fillWidth: !hiddenPlace
                                 Layout.fillHeight: !hiddenPlace
                                 flat: false
                                 visible: !hiddenPlace
-                                isCurrentItem: control.currentPath === model.path
-                                iconSource: control.placeIcon(model.path, model.icon, model.label, model.type, false)
-                                iconSizeHint: Maui.Style.iconSize
-                                label1.text: model.label
+                                isCurrentItem: control.currentQuickPath.length > 0
+                                              ? control.currentQuickPath === placePath
+                                              : control.currentPath === placePath
+                                iconSource: control.placeIcon(placePath, placeIconName, placeLabel, placeType, false)
+                                iconSizeHint: 16
+                                label1.text: placeLabel
                                 labelsVisible: false
-                                tooltipText: model.label
-                                onClicked: control.placeClicked(model.path)
+                                tooltipText: placeLabel
+
+                                onClicked: (mouse) => control.placeClicked(placePath, mouse)
+                                onRightClicked: control.contextMenuRequested(placePath, placeType, -1)
+                                onPressAndHold: control.contextMenuRequested(placePath, placeType, -1)
                             }
                         }
                     }
@@ -180,13 +238,18 @@ Loader
             delegate: Maui.ListDelegate
             {
                 contentItem.z: 1
+                readonly property bool shownPlace: control.shouldShowPlace(index, model.type, model.path)
+                readonly property string displayLabel: control.placeLabel(model.path, model.label, model.type)
                 width: listBrowser.availableWidth
+                height: shownPlace ? implicitHeight : 0
+                visible: shownPlace
+                enabled: shownPlace
                 iconSize: Maui.Style.iconSize
                 labelVisible: true
                 iconVisible: true
                 isCurrentItem: control.currentPath === model.path
-                label: control.placeLabel(model.path, model.label, model.type)
-                tooltipText: label
+                label: displayLabel
+                tooltipText: displayLabel
                 iconName: control.placeIcon(model.path, model.icon, model.label, model.type, placesList.isDevice(index))
 
                 template.content: ToolButton
@@ -211,7 +274,9 @@ Loader
                     }
                 }
 
-                onClicked: control.placeClicked(model.path)
+                onClicked: (mouse) => control.placeClicked(model.path, mouse)
+                onRightClicked: control.contextMenuRequested(model.path, String(model.type), index)
+                onPressAndHold: control.contextMenuRequested(model.path, String(model.type), index)
             }
 
             section.property: "type"
@@ -241,6 +306,7 @@ Loader
             onDiscarded:
             {
                 sideBarPane.list.requestTeardown(deviceIndex)
+                control.deviceUnmounting(deviceLabel)
                 close()
             }
             onRejected: close()
