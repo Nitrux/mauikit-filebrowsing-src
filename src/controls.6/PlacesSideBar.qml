@@ -27,6 +27,7 @@ Loader
     property string pendingMountUdi
     property string pendingMountFallbackPath
     property int pendingMountModifiers: Qt.NoModifier
+    property var pendingMountCallback: null
     property var deviceReturnPaths: ({})
     property var deviceMountPaths: ({})
     property string currentPath
@@ -116,11 +117,12 @@ Loader
         return location === root || location.startsWith(root + "/")
     }
 
-    function requestDeviceSetup(index, udi, modifiers)
+    function requestDeviceSetup(index, udi, modifiers, callback)
     {
         pendingMountUdi = String(udi)
         pendingMountFallbackPath = currentPath
         pendingMountModifiers = modifiers === undefined ? Qt.NoModifier : modifiers
+        pendingMountCallback = callback || null
         list.requestSetup(index)
     }
 
@@ -241,6 +243,7 @@ Loader
                 {
                     control.pendingMountUdi = ""
                     control.pendingMountFallbackPath = ""
+                    control.pendingMountCallback = null
                     control.operationError(message)
                 }
 
@@ -249,7 +252,7 @@ Loader
                     if (String(udi) !== control.pendingMountUdi)
                         return
 
-                    if (!control.mountRemovableOnClick)
+                    if (!control.mountRemovableOnClick && !control.pendingMountCallback)
                     {
                         control.pendingMountUdi = ""
                         control.pendingMountFallbackPath = ""
@@ -258,11 +261,16 @@ Loader
 
                     const deviceId = control.pendingMountUdi
                     const modifiers = control.pendingMountModifiers
+                    const callback = control.pendingMountCallback
                     control.deviceReturnPaths[deviceId] = control.pendingMountFallbackPath
                     control.deviceMountPaths[deviceId] = String(path)
                     control.pendingMountUdi = ""
                     control.pendingMountFallbackPath = ""
-                    control.placeClicked(String(path), {modifiers: modifiers})
+                    control.pendingMountCallback = null
+                    if (callback)
+                        callback(String(path))
+                    else
+                        control.placeClicked(String(path), {modifiers: modifiers})
                 }
 
                 function onDeviceUnavailable(udi, path)
@@ -396,7 +404,7 @@ Loader
                 {
                     if (control.mountRemovableOnClick
                             && placesList.isDevice(index)
-                            && control.isExternalDeviceSection(model.type)
+                            && (control.isExternalDeviceSection(model.type) || control.isStorageSection(model.type))
                             && placesList.setupNeeded(index))
                     {
                         control.requestDeviceSetup(index, model.udi, mouse.modifiers)
