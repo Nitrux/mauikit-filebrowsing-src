@@ -62,6 +62,7 @@ Item
     signal itemClicked(int index)
     signal itemDoubleClicked(int index)
     signal itemRightClicked(int index)
+    signal itemContextMenuRequested(var item, var list)
     signal itemToggled(int index, bool state)
     signal itemsSelected(var indexes)
     signal keyPress(var event)
@@ -123,6 +124,27 @@ Item
             return control.audioFallbackImageSource
 
         return ""
+    }
+
+    function addToSelection(item)
+    {
+        if (!control.selectionBar || !item || typeof item.path !== "string"
+                || item.path.startsWith("tags://")
+                || item.path.startsWith("applications://"))
+        {
+            return
+        }
+
+        control.selectionBar.append(item.path, item)
+    }
+
+    function addModelIndexes(model, indexes)
+    {
+        if (!model || !indexes)
+            return
+
+        for (const index of indexes)
+            control.addToSelection(model.get(index))
     }
 
     function label2For(item)
@@ -314,6 +336,8 @@ Item
                 anchors.fill: parent
                 background: null
                 clip: true
+                enableLassoSelection: true
+                onItemsSelected: (indexes) => control.addModelIndexes(_parentModel, indexes)
 
                 flickable.add: Transition
                 {
@@ -346,13 +370,19 @@ Item
                 }
 
                 onAreaClicked: (mouse) => control.areaClicked(mouse)
-                onAreaRightClicked: control.areaRightClicked()
+                onAreaRightClicked:
+                {
+                    _splitView.currentIndex = 0
+                    control.forceActiveFocus()
+                    control.areaRightClicked()
+                }
 
                 model: _parentModel
                 currentIndex: -1
 
                 delegate: Maui.ListBrowserDelegate
                 {
+                    id: _parentDelegate
                     width: ListView.view.width
                     flat: true
                     iconSource: control.iconFor(model)
@@ -360,11 +390,19 @@ Item
                     label1.text: model.label || ""
                     label2.text: control.label2For(model)
                     tooltipText: model.path
+                    checkable: control.selectionMode || checked
+                    checked: control.selectionBar ? control.selectionBar.contains(model.path) : false
                     isCurrentItem: String(model.path || "") === control.currentPath
 
-                    onClicked:
+                    onClicked: (mouse) =>
                     {
                         control.forceActiveFocus()
+
+                        if (mouse.button === Qt.LeftButton && (mouse.modifiers & Qt.ControlModifier))
+                        {
+                            control.addToSelection(model)
+                            return
+                        }
 
                         if (control.isDirectory(model))
                             control.navigateTo(String(model.path))
@@ -378,6 +416,34 @@ Item
                             control.navigateTo(String(model.path))
                         else
                             control.fileRequested(String(model.path))
+                    }
+
+                    onRightClicked:
+                    {
+                        _splitView.currentIndex = 0
+                        _parentColumn.currentIndex = index
+                        control.forceActiveFocus()
+                        control.itemContextMenuRequested(model, _parentModel.list)
+                    }
+
+                    Connections
+                    {
+                        target: control.selectionBar
+
+                        function onUriRemoved(uri)
+                        {
+                            _parentDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+
+                        function onUriAdded(uri)
+                        {
+                            _parentDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+
+                        function onCleared()
+                        {
+                            _parentDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
                     }
                 }
             }
@@ -397,6 +463,8 @@ Item
                 anchors.fill: parent
                 background: null
                 clip: true
+                enableLassoSelection: true
+                onItemsSelected: (indexes) => control.addModelIndexes(control.currentFMModel, indexes)
 
                 flickable.add: Transition
                 {
@@ -429,13 +497,19 @@ Item
                 }
 
                 onAreaClicked: (mouse) => control.areaClicked(mouse)
-                onAreaRightClicked: control.areaRightClicked()
+                onAreaRightClicked:
+                {
+                    _splitView.currentIndex = 1
+                    control.forceActiveFocus()
+                    control.areaRightClicked()
+                }
 
                 model: control.currentFMModel
                 currentIndex: -1
 
                 delegate: Maui.ListBrowserDelegate
                 {
+                    id: _currentDelegate
                     width: ListView.view.width
                     flat: true
                     iconSource: control.iconFor(model)
@@ -461,6 +535,12 @@ Item
                         _currentColumn.currentIndex = index
                         control.forceActiveFocus()
 
+                        if (mouse.button === Qt.LeftButton && (mouse.modifiers & Qt.ControlModifier))
+                        {
+                            control.addToSelection(model)
+                            return
+                        }
+
                         if (mouse.button === Qt.LeftButton && control.selectionMode && !control.isDirectory(model))
                             control.itemsSelected([index])
                     }
@@ -477,6 +557,7 @@ Item
 
                     onRightClicked:
                     {
+                        _splitView.currentIndex = 1
                         _currentColumn.currentIndex = index
                         control.forceActiveFocus()
                         control.itemRightClicked(index)
@@ -485,6 +566,26 @@ Item
                     onToggled: (state) => control.itemToggled(index, state)
 
                     onContentDropped: (drop) => control.contentDropped(drop, String(model.path))
+
+                    Connections
+                    {
+                        target: control.selectionBar
+
+                        function onUriRemoved(uri)
+                        {
+                            _currentDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+
+                        function onUriAdded(uri)
+                        {
+                            _currentDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+
+                        function onCleared()
+                        {
+                            _currentDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+                    }
                 }
             }
         }
@@ -503,6 +604,8 @@ Item
                 anchors.fill: parent
                 background: null
                 clip: true
+                enableLassoSelection: true
+                onItemsSelected: (indexes) => control.addModelIndexes(_previewModel, indexes)
 
                 flickable.add: Transition
                 {
@@ -535,13 +638,19 @@ Item
                 }
 
                 onAreaClicked: (mouse) => control.areaClicked(mouse)
-                onAreaRightClicked: control.areaRightClicked()
+                onAreaRightClicked:
+                {
+                    _splitView.currentIndex = 2
+                    control.forceActiveFocus()
+                    control.areaRightClicked()
+                }
 
                 model: _previewModel
                 visible: control.selectedIsDirectory
 
                 delegate: Maui.ListBrowserDelegate
                 {
+                    id: _previewDelegate
                     width: ListView.view.width
                     flat: true
                     iconSource: control.iconFor(model)
@@ -551,11 +660,19 @@ Item
                     label2.text: control.label2For(model)
                     label3.text: model.modified ? Maui.Handy.formatDate(model.modified, "MM/dd/yyyy") : ""
                     tooltipText: model.path
+                    checkable: control.selectionMode || checked
+                    checked: control.selectionBar ? control.selectionBar.contains(model.path) : false
 
-                    onClicked:
+                    onClicked: (mouse) =>
                     {
                         _previewColumn.currentIndex = index
                         control.forceActiveFocus()
+
+                        if (mouse.button === Qt.LeftButton && (mouse.modifiers & Qt.ControlModifier))
+                        {
+                            control.addToSelection(model)
+                            return
+                        }
 
                         if (control.isDirectory(model))
                             control.navigateTo(String(model.path))
@@ -573,13 +690,44 @@ Item
                         else
                             control.fileRequested(String(model.path))
                     }
+
+                    onRightClicked:
+                    {
+                        _splitView.currentIndex = 2
+                        _previewColumn.currentIndex = index
+                        control.forceActiveFocus()
+                        control.itemContextMenuRequested(model, _previewModel.list)
+                    }
+
+                    Connections
+                    {
+                        target: control.selectionBar
+
+                        function onUriRemoved(uri)
+                        {
+                            _previewDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+
+                        function onUriAdded(uri)
+                        {
+                            _previewDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+
+                        function onCleared()
+                        {
+                            _previewDelegate.checked = Qt.binding(function() { return control.selectionBar ? control.selectionBar.contains(model.path) : false })
+                        }
+                    }
                 }
             }
 
             Loader
             {
                 id: _previewLoader
-                anchors.fill: parent
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: item && item.implicitHeight > 0 ? item.implicitHeight : parent.height
                 active: control.visible
                          && control.enabled
                          && !control.selectedIsDirectory

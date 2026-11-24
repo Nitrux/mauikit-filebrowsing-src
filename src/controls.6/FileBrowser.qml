@@ -384,6 +384,7 @@ Maui.Page
      * @param index the index position of the item
      */
     signal itemRightClicked(int index)
+    signal millerItemRightClicked(var item, var list)
 
     /**
      * @brief Emitted when an item left emblem badge has been clicked.
@@ -1122,6 +1123,12 @@ Maui.Page
             control.currentView.forceActiveFocus()
         }
 
+        function onMillerItemRightClicked(item, list)
+        {
+            control.millerItemRightClicked(item, list)
+            control.currentView.forceActiveFocus()
+        }
+
         function onItemToggled(index, state)
         {
             const item = control.currentFMModel.get(index)
@@ -1252,6 +1259,7 @@ Maui.Page
                 id: _browser
                 anchors.fill: parent
                 background: null
+                selectionBar: control.selectionBar
 
                 Binding on currentIndex
                 {
@@ -1291,6 +1299,7 @@ Maui.Page
             {
                 id: _searchBrowser
                 property alias browser : _searchBrowser
+                selectionBar: control.selectionBar
                 readOnly: true
                 path: control.currentPath
                 Binding on currentIndex
@@ -1699,13 +1708,13 @@ Maui.Page
      * @brief Opens a dialog for typing the new name of the item
      * This will target the current selected item in the browser view
      **/
-    function renameItem()
+    function renameItem(files)
     {
         if(control.isSearchView)
             return;
 
-        var items = []
-        if(control.selectionBar && control.selectionBar.count > 0)
+        var items = files ? files.slice() : []
+        if(!files && control.selectionBar && control.selectionBar.count > 0)
         {
             for(var uri of control.selectionBar.uris)
             {

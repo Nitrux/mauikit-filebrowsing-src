@@ -92,9 +92,6 @@ QList<QUrl> clipboardUrls(const QMimeData *mimeData)
     if (mimeData->hasFormat(QStringLiteral("text/uri-list")))
         return parseClipboardUrlList(QString::fromUtf8(mimeData->data(QStringLiteral("text/uri-list"))));
 
-    if (mimeData->hasText())
-        return parseClipboardUrlList(mimeData->text());
-
     return {};
 }
 

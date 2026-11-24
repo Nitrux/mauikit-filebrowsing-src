@@ -5,6 +5,7 @@
 #endif
 
 #include <QImage>
+#include <QImageReader>
 #include <QCache>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -62,12 +63,23 @@ AsyncImageResponse::AsyncImageResponse(const QString &id, const QSize &requested
     : m_id(id)
     , m_requestedSize(requestedSize)
 {
-#ifdef KIO_AVAILABLE
     constexpr int maximumPreviewDimension = 2048;
     const QSize effectiveSize = (requestedSize.width() > 0 && requestedSize.height() > 0)
         ? requestedSize.boundedTo(QSize(maximumPreviewDimension, maximumPreviewDimension))
         : QSize(64, 64);
 
+    if (id.startsWith(QStringLiteral("qrc:/")))
+    {
+        QImageReader reader(QStringLiteral(":") + id.mid(4));
+        reader.setAutoTransform(true);
+        m_image = reader.read();
+        if (!m_image.isNull())
+            m_image = m_image.scaled(effectiveSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        finish();
+        return;
+    }
+
+#ifdef KIO_AVAILABLE
     KIO::PreviewJob::setDefaultDevicePixelRatio(qApp->devicePixelRatio());
     static const QStringList plugins = KIO::PreviewJob::availablePlugins();
     const QUrl sourceUrl = QUrl::fromUserInput(id, QStringLiteral("/"), QUrl::AssumeLocalFile);

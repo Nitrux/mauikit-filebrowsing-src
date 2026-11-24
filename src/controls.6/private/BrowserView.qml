@@ -34,6 +34,7 @@ Maui.AltBrowser
      * The entry element model details are accessible via the `model` property. For example `model.name`, `model.url`, etc.
      */
     property Component delegateInjector : null
+    property Maui.SelectionBar selectionBar: null
 
     /**
      * @brief An alias to the current popup dialog being shown.
@@ -116,6 +117,7 @@ Maui.AltBrowser
         onItemClicked: (index) => control.itemClicked(index)
         onItemDoubleClicked: (index) => control.itemDoubleClicked(index)
         onItemRightClicked: (index) => control.itemRightClicked(index)
+        onItemContextMenuRequested: (item, list) => control.millerItemRightClicked(item, list)
         onItemToggled: (index, state) => control.itemToggled(index, state)
         onKeyPress: (event) => control.keyPress(event)
         onFolderRequested: (path) => control.path = path
@@ -235,6 +237,7 @@ Maui.AltBrowser
      * @param index the index position of the item
      */
     signal itemRightClicked(int index)
+    signal millerItemRightClicked(var item, var list)
 
     /**
      * @brief Emitted when an entry selection has been toggled.
