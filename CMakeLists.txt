@@ -31,6 +31,10 @@ set(AUTOMOC_MOC_OPTIONS -Muri=org.mauikit.filebrowsing)
 
 project(FileBrowsing LANGUAGES CXX VERSION ${MAUIKIT_RELEASE_VERSION})
 
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install path prefix" FORCE)
+endif()
+
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 
