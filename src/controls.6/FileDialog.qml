@@ -526,6 +526,7 @@ Maui.PopupPage
             footer: Maui.SelectionBar
             {
                 id: _selectionBar
+                showSingleItemCount: true
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: Math.min(parent.width, implicitWidth)
 
