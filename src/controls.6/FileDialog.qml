@@ -528,7 +528,7 @@ Maui.PopupPage
                 id: _selectionBar
                 showSingleItemCount: true
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: Math.min(parent.width, implicitWidth)
+                width: parent ? Math.min(parent.width, implicitWidth) : implicitWidth
 
                 listDelegate: Maui.ListBrowserDelegate
                 {
