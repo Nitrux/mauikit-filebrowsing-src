@@ -523,21 +523,19 @@ Maui.PopupPage
                 }
             }
             
-            Item
-            {
-                id: _selectionBarContainer
-                visible: false
-            }
-
-            Maui.SelectionBar
+            footer: Maui.SelectionBar
             {
                 id: _selectionBar
-                parent: _selectionBarContainer
-                visible: false
-                
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(parent.width, implicitWidth)
+
                 listDelegate: Maui.ListBrowserDelegate
                 {
-                    width: control.width
+                    width: ListView.view.width
+                    checkable: true
+                    checked: true
+                    contentItem.z: 1
+                    onToggled: _selectionBar.removeAtIndex(index)
                     iconSource: model.icon
                     imageSource: model.thumbnail
                     label1.text: model.label

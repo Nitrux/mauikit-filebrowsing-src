@@ -564,6 +564,7 @@ Maui.AltBrowser
 
         tooltipText: control.objectName === "searchView" ? delegate.pathForDisplay(model.path) : model.path
 
+        contentItem.z: checked ? 1 : 0
         checkable: control.selectionMode || checked
         readonly property string rawImageSource: height > 32 ? control.thumbnailSourceForEntry(model.mime, model.thumbnail, model.size) : ""
         readonly property bool thumbnailFailed: template.iconItem
@@ -780,6 +781,7 @@ Maui.AltBrowser
 
             isCurrentItem: parent.GridView.isCurrentItem || checked
             tooltipText: model.label
+            contentItem.z: checked ? 1 : 0
             checkable: control.selectionMode || checked
             checked: (selectionBar ? selectionBar.contains(model.path) : false)
             draggable: true
